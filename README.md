@@ -1,33 +1,126 @@
 # Data-Segregation Failures in Multi-Agent LLM Systems
 
 > [!CAUTION]
-> **Intentionally vulnerable educational project.** This repository demonstrates
-> a bounded application-logic flaw in multi-agent LLM systems. It uses synthetic,
-> in-memory data and a deterministic offline model by default. Do not deploy the
-> vulnerable path or connect it to production data.
+> **Intentionally vulnerable educational project.** The vulnerable scenario
+> deliberately omits a read-authorization check to demonstrate cross-agent
+> data leakage. It uses synthetic, in-memory data and a deterministic fake
+> model by default. Do not deploy the vulnerable path or connect it to
+> production data.
 
-## The problem
+## What this repository demonstrates
 
-When several agents share tools and memory inside a regulated workspace, the
-orchestrator can become a **confused deputy**: it executes a model-proposed read
-or write against the wrong tenant because authorization lives in prompt reasoning
-instead of at execution.
+Three minimal agents—Client A, Client B, and an orchestrator—share a memory
+store. Client B asks the orchestrator to read Client A's secret:
 
-**Security invariant:**
+- `VulnerableToolExecutor` trusts the model-selected owner and leaks.
+- `OwnerScopedToolExecutor` binds that owner to the requester and blocks.
 
-```text
-allow when requester == owner; otherwise deny
+The vulnerable and corrected paths live side by side so the enforcement
+boundary is easy to compare. See [THREAT_MODEL.md](THREAT_MODEL.md) for the
+security invariant, trust boundaries, and explicit scope.
+
+## Quick start
+
+Install the locked dependencies:
+
+```bash
+uv sync
 ```
 
-The requester identity is trusted execution context. Every message body, prompt
-fragment, and model/tool proposal is untrusted.
+Run the deterministic, offline comparison:
 
-## Documentation
+```bash
+just demo
+```
 
-- [THREAT_MODEL.md](THREAT_MODEL.md) — assets, trust boundaries, intentional vulnerability, mitigations
-- [SECURITY.md](SECURITY.md) — reporting unintended issues and lab safety controls
+Expected conclusion:
 
-## Status
+```text
+Vulnerable           ALLOWED / LEAKED
+Protected            BLOCKED / SAFE
+```
 
-This repository is an educational lab, not a deployable agent platform. Runnable
-demonstrations and tests land in subsequent commits.
+Reproduce only the intentional vulnerability test:
+
+```bash
+just reproduce-vulnerability
+```
+
+Run every local quality and behavior check:
+
+```bash
+just check
+```
+
+Run a compact, repeated comparison (500 fresh runs per policy by default):
+
+```bash
+just repetitions
+just repetitions --repetitions 25
+```
+
+## Code organization
+
+The package uses a `src/` layout so each responsibility has one home:
+
+```text
+src/data_segregation_lab/
+├── models.py          # messages, tool calls, and structured results
+├── backends.py        # deterministic and opt-in OpenRouter adapters
+├── tool_protocol.py   # fail-closed parsing of model text
+├── storage.py         # storage protocol and in-memory implementation
+├── executors.py       # intentionally vulnerable and protected policies
+├── scenario.py        # shared orchestration flow
+├── presentation.py    # terminal-safe rendering only
+├── cli.py             # narrated demo entry point
+└── batch.py           # deterministic repetition entry point
+```
+
+Tests are split along the same boundaries. Both CLIs and all end-to-end tests
+use `ScenarioRunner`; the presentation module never executes storage operations.
+
+## Explicit OpenRouter mode
+
+OpenRouter calls are optional and never selected automatically. Copy the
+credential template, add your own ignored key, and use the separate command:
+
+```bash
+cp .env.example .env.openrouter
+just demo-openrouter
+```
+
+`demo-openrouter` can incur API charges and is intentionally excluded from CI.
+Network requests use verified TLS. Never commit `.env.openrouter` or a real API
+key.
+
+## Repository safety boundary
+
+| Intentionally vulnerable | Kept secure |
+| --- | --- |
+| Missing owner check in `VulnerableToolExecutor` | TLS validation |
+| Cross-owner read in synthetic memory | Credential and dotenv handling |
+| Deterministic exploit assertion | Default and CI execution |
+| Model-selected target owner | Terminal rendering of model output |
+
+The parser, model harness, and in-memory store remain intentionally minimal and
+are not production components. New vulnerability scenarios should each state
+one invariant, reproduce one bounded defect, provide a mitigation beside it,
+and use only synthetic data.
+
+## Reporting unintended vulnerabilities
+
+The demonstrated cross-owner read is expected behavior. Please report unrelated
+security problems according to [SECURITY.md](SECURITY.md), preferably through
+GitHub private vulnerability reporting rather than a public issue.
+
+## GitHub maintainer setup
+
+After publishing the repository, configure these hosted protections in GitHub:
+
+- Enable private vulnerability reporting under **Settings → Security**.
+- Enable secret scanning and push protection under **Settings → Advanced
+  Security**.
+- Protect the default branch and require the `Vulnerability Lab CI / Verify
+  lab` check before merge.
+- Keep Actions workflow permissions read-only unless a future job has a
+  documented need for additional access.
