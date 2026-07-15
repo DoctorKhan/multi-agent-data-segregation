@@ -1,0 +1,24 @@
+# Local notes
+notes.md
+
+# Local credentials (keep the documented placeholder)
+.env*
+!.env.example
+# Python bytecode and tool caches
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Local virtual environment
+.venv/
+
+# Python build and package metadata
+build/
+dist/
+*.egg-info/
+
+# macOS metadata
+.DS_Store
+
+# Accidental local wheel downloads
+*.whl

@@ -1,0 +1,48 @@
+[project]
+# Runtime metadata and dependencies used by both offline and OpenRouter modes.
+name = "multi-agent-data-segregation"
+version = "0.1.0"
+description = "A reproducible demonstration of data-segregation failures in multi-agent systems."
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "certifi>=2026.6.15",
+    "python-dotenv>=1.0",
+]
+
+[project.scripts]
+segregation-demo = "data_segregation_lab.cli:main"
+segregation-repetitions = "data_segregation_lab.batch:main"
+
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[dependency-groups]
+# Developer-only tools used by `just check` and GitHub Actions.
+dev = [
+    "pyright>=1.1.400",
+    "pytest>=8.0",
+    "ruff>=0.12",
+]
+
+[tool.pytest.ini_options]
+# Tests exercise the package installed by uv rather than importing root files.
+testpaths = ["tests"]
+# This marker makes the deliberately successful exploit easy to run separately.
+markers = [
+    "intentional_vulnerability: reproduces a documented security flaw by design",
+]
+
+[tool.pyright]
+# Strict mode prevents untyped model responses from silently becoming `Any`.
+typeCheckingMode = "strict"
+pythonVersion = "3.10"
+include = [
+    # Keep the analysis boundary explicit as the lab grows.
+    "src",
+    "tests",
+]
