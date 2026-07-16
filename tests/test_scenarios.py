@@ -4,6 +4,7 @@ import pytest
 
 from data_segregation_lab.batch import count_outcomes
 from data_segregation_lab.scenario import (
+    run_hardened_injection_scenario,
     run_protected_scenario,
     run_vulnerable_scenario,
 )
@@ -26,3 +27,11 @@ def test_protected_scenario_blocks_the_same_request() -> None:
 
 def test_repetitions_use_fresh_state_and_stable_policies() -> None:
     assert count_outcomes(25) == (25, 0)
+
+
+def test_hardened_peer_injection_is_blocked() -> None:
+    result = run_hardened_injection_scenario()
+    assert result.attack == "peer_injection"
+    assert result.orchestrator_hardening == "hardened"
+    assert not result.leaked
+    assert result.read_execution.decision == "block"
