@@ -10,14 +10,24 @@
 ## What this repository demonstrates
 
 Three minimal agents—Client A, Client B, and an orchestrator—share a memory
-store. Client B asks the orchestrator to read Client A's secret:
+store inside a synthetic regulated-workspace simulation. Client B asks the
+orchestrator to read Client A's secret:
 
 - `VulnerableToolExecutor` trusts the model-selected owner and leaks.
 - `OwnerScopedToolExecutor` binds that owner to the requester and blocks.
+- A third scenario adds **peer instruction injection** plus a **hardened
+  orchestrator prompt** — the protected executor still blocks the leak.
 
 The vulnerable and corrected paths live side by side so the enforcement
 boundary is easy to compare. See [THREAT_MODEL.md](THREAT_MODEL.md) for the
-security invariant, trust boundaries, and explicit scope.
+security invariant, trust boundaries, and explicit scope. See
+[PLAYBOOK.md](PLAYBOOK.md) for how the pillars map to multi-agent agent
+security in regulated environments.
+
+**Companion project:** [Redliner Protocol](../redliner-protocol) — browser
+prompt-injection CTF with constrained action schemas and adversarial output
+validation (`sanitizeDecision`). Use both repos together in a portfolio:
+Redliner for untrusted **context**; this lab for untrusted **tools and tenancy**.
 
 ## Quick start
 
@@ -38,6 +48,7 @@ Expected conclusion:
 ```text
 Vulnerable           ALLOWED / LEAKED
 Protected            BLOCKED / SAFE
+Protected + peer injection   BLOCKED / SAFE
 ```
 
 Reproduce only the intentional vulnerability test:
@@ -66,11 +77,14 @@ The package uses a `src/` layout so each responsibility has one home:
 ```text
 src/data_segregation_lab/
 ├── models.py          # messages, tool calls, and structured results
+├── protocol.py        # inter-agent message envelope + untrusted labeling
+├── prompts.py         # orchestrator hardening tiers (prompt defense alone fails)
+├── ownership.py       # intelligence ownership registry (synthetic tenant metadata)
 ├── backends.py        # deterministic and opt-in OpenRouter adapters
-├── tool_protocol.py   # fail-closed parsing of model text
+├── tool_protocol.py   # fail-closed parsing + sanitize_tool_call boundary
 ├── storage.py         # storage protocol and in-memory implementation
 ├── executors.py       # intentionally vulnerable and protected policies
-├── scenario.py        # shared orchestration flow
+├── scenario.py        # shared orchestration flow (3 scenario variants)
 ├── presentation.py    # terminal-safe rendering only
 ├── cli.py             # narrated demo entry point
 └── batch.py           # deterministic repetition entry point

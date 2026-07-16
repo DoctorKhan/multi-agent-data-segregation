@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Literal
+from typing import Any, Literal
+
+from data_segregation_lab.prompts import Hardening
 
 ToolAction = Literal["read", "write"]
 Decision = Literal["allow", "block", "no_decision"]
 ScenarioMode = Literal["vulnerable", "protected"]
+AttackKind = Literal["cross_owner", "peer_injection", "ogi_contamination"]
 
 
 @dataclass(frozen=True)
@@ -53,16 +56,22 @@ class Participant:
 
 @dataclass(frozen=True)
 class ToolExecution:
-    """The policy decision and result for one proposed tool call."""
+    """Policy decision and result for one proposed tool call."""
 
     decision: Decision
-    call: ToolCall | None = None
+    tool_call: ToolCall | None = None
     value: str | None = None
+    reason: str | None = None
 
-    @classmethod
-    def no_decision(cls) -> ToolExecution:
-        """Represent model output that contained no executable call."""
-        return cls(decision="no_decision")
+    def __init__(self, decision: Decision, *, call: ToolCall | None = None, tool_call: ToolCall | None = None, value: str | None = None, reason: str | None = None) -> None:
+        object.__setattr__(self, "decision", decision)
+        object.__setattr__(self, "tool_call", tool_call if tool_call is not None else call)
+        object.__setattr__(self, "value", value)
+        object.__setattr__(self, "reason", reason)
+
+    @property
+    def call(self) -> ToolCall | None:  # backward compat alias used by tests/output
+        return self.tool_call
 
 
 @dataclass(frozen=True)
@@ -70,6 +79,8 @@ class ScenarioResult:
     """Structured evidence from one scenario, independent of terminal output."""
 
     mode: ScenarioMode
+    attack: AttackKind
+    orchestrator_hardening: Hardening
     requester: str
     client_a_message: AgentMessage
     client_a_output: str
@@ -79,11 +90,12 @@ class ScenarioResult:
     client_b_output: str
     orchestrator_output: str
     read_execution: ToolExecution
+    ogi_anomaly_entry: Any | None = None
+    ogi_leak_blocked: bool = False
 
     @property
     def leaked(self) -> bool:
-        """Return whether another owner's value reached the requester."""
-        call = self.read_execution.call
+        call = self.read_execution.tool_call
         return (
             self.read_execution.decision == "allow"
             and self.read_execution.value is not None

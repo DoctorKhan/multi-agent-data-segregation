@@ -28,13 +28,18 @@ prompt, message content, and all LLM output are untrusted.
 
 ```text
 user/peer message
-       ↓ untrusted
+       ↓ untrusted (protocol labels sender; body is never an auth grant)
 LLM output and tool arguments
-       ↓ schema parsing
-orchestrator policy boundary
+       ↓ schema parsing + sanitize_tool_call
+orchestrator policy boundary (requester == owner)
        ↓ authorized operation only
 InMemoryStore
 ```
+
+Inter-agent messages use a trusted envelope (`Participant.send` assigns
+`sender`) and untrusted bodies (`protocol.format_messages_for_context`).
+Peer instruction injection is modeled in scenario 3: hardened prompts may
+still produce a cross-owner tool proposal; the executor must default-deny.
 
 `DeterministicLLM` is treated as untrusted because it represents the same
 boundary as a network model. `OpenRouterLLM`, OpenRouter responses, and peer

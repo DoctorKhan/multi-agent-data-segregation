@@ -2,7 +2,9 @@
 
 from data_segregation_lab.backends import LLMBackend
 from data_segregation_lab.executors import VulnerableToolExecutor
+from data_segregation_lab.ownership import IntelligenceRegistry
 from data_segregation_lab.presentation import DemoPresenter, escape_terminal_controls
+from data_segregation_lab.prompts import Hardening
 from data_segregation_lab.scenario import ScenarioRunner
 from data_segregation_lab.storage import InMemoryStore
 
@@ -13,8 +15,15 @@ class ControlCharacterBackend:
     def __init__(self, delegate: LLMBackend) -> None:
         self._delegate = delegate
 
-    def complete(self, role: str, prompt: str) -> str:
-        output = self._delegate.complete(role, prompt)
+    def complete(
+        self,
+        role: str,
+        prompt: str,
+        *,
+        hardening: Hardening = "naive",
+    ) -> str:
+        output = self._delegate.complete(role, prompt, hardening=hardening)
+        del hardening
         # Inject into prose only, leaving the following tool line executable.
         return "\x1b[2J" + output if role == "client_a" else output
 
@@ -31,6 +40,7 @@ def test_presenter_renders_results_without_raw_terminal_controls() -> None:
         ControlCharacterBackend(DeterministicLLM()),
         store,
         VulnerableToolExecutor(store),
+        IntelligenceRegistry(),
     ).run()
     rendered = DemoPresenter(use_color=False).render_scenario(1, result)
     assert "\\x1b[2J" in rendered

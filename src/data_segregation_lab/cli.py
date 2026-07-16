@@ -1,4 +1,4 @@
-"""Command-line entry point for the narrated two-scenario demonstration."""
+"""Command-line entry point for the narrated security demonstration."""
 
 from __future__ import annotations
 
@@ -9,6 +9,7 @@ from collections.abc import Sequence
 from data_segregation_lab.backends import DeterministicLLM, LLMBackend, OpenRouterLLM
 from data_segregation_lab.presentation import DemoPresenter
 from data_segregation_lab.scenario import (
+    run_hardened_injection_scenario,
     run_protected_scenario,
     run_vulnerable_scenario,
 )
@@ -33,14 +34,22 @@ def _select_backend(arguments: Sequence[str]) -> tuple[LLMBackend, str]:
 
 
 def main() -> None:
-    """Run both policies through the shared runner, then present the results."""
+    """Run all policies through the shared runner, then present the results."""
     backend, notice = _select_backend(sys.argv[1:])
     vulnerable = run_vulnerable_scenario(backend)
     protected = run_protected_scenario(backend)
+    hardened_injection = run_hardened_injection_scenario(backend)
     presenter = DemoPresenter(
         use_color=sys.stdout.isatty() and "NO_COLOR" not in os.environ
     )
-    print(presenter.render(vulnerable, protected, mode_notice=notice))
+    print(
+        presenter.render(
+            vulnerable,
+            protected,
+            hardened_injection,
+            mode_notice=notice,
+        )
+    )
 
 
 if __name__ == "__main__":

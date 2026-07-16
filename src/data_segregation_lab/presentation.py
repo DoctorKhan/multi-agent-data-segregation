@@ -82,16 +82,26 @@ class DemoPresenter:
         """Render one result without re-running any business logic."""
         protected = result.mode == "protected"
         title = "PROTECTED" if protected else "INTENTIONALLY VULNERABLE"
-        subtitle = (
-            "Requester-scoped authorization runs before storage access."
-            if protected
-            else "The executor trusts the owner supplied by untrusted model text."
-        )
+        if result.attack == "peer_injection":
+            subtitle = (
+                "Peer message contains instruction injection; hardened orchestrator "
+                "prompt + requester-scoped executor."
+                if protected
+                else "Peer injection succeeds only because authorization is missing."
+            )
+        else:
+            subtitle = (
+                "Requester-scoped authorization runs before storage access."
+                if protected
+                else "The executor trusts the owner supplied by untrusted model text."
+            )
         policy = "requester must equal target owner" if protected else "none (unsafe)"
+        if result.attack == "peer_injection":
+            policy += f"; orchestrator prompt={result.orchestrator_hardening}"
         write_call = result.write_execution.call
         lines = [
             "",
-            self._style(f"SCENARIO {number} OF 2  ·  {title}", "1;35"),
+            self._style(f"SCENARIO {number} OF 3  ·  {title}", "1;35"),
             subtitle,
             "─" * WIDTH,
             "",
@@ -124,14 +134,20 @@ class DemoPresenter:
         self,
         vulnerable: ScenarioResult,
         protected: ScenarioResult,
+        hardened_injection: ScenarioResult,
         *,
         mode_notice: str,
     ) -> str:
-        """Render the complete two-scenario comparison."""
+        """Render the complete three-scenario comparison."""
         vulnerable_outcome = "ALLOWED / LEAKED" if vulnerable.leaked else "NO LEAK"
         protected_outcome = (
             "BLOCKED / SAFE"
             if protected.read_execution.decision == "block"
+            else "UNEXPECTED"
+        )
+        injection_outcome = (
+            "BLOCKED / SAFE"
+            if hardened_injection.read_execution.decision == "block"
             else "UNEXPECTED"
         )
         lines = [
@@ -143,13 +159,15 @@ class DemoPresenter:
             self._style(mode_notice, "1;33"),
             self.render_scenario(1, vulnerable),
             self.render_scenario(2, protected),
+            self.render_scenario(3, hardened_injection),
             "",
             self._style("COMPARISON", "1;36"),
             "─" * WIDTH,
-            f"   {'Configuration':<28} Decision / outcome",
-            f"   {'Intentionally vulnerable':<28} {vulnerable_outcome}",
-            f"   {'Protected':<28} {protected_outcome}",
+            f"   {'Configuration':<36} Decision / outcome",
+            f"   {'Intentionally vulnerable':<36} {vulnerable_outcome}",
+            f"   {'Protected (confused deputy)':<36} {protected_outcome}",
+            f"   {'Protected + peer injection':<36} {injection_outcome}",
             "",
-            "Authorization must happen before the storage operation.",
+            "Prompt hardening helps; authorization at the executor is what holds.",
         ]
         return "\n".join(lines)

@@ -1,10 +1,14 @@
-"""Fail-closed parser for the lab's intentionally tiny text tool protocol."""
+"""Fail-closed parser and sanitizer for the lab's intentionally tiny text tool protocol."""
 
 from __future__ import annotations
 
+import re
 from typing import cast
 
 from data_segregation_lab.models import ToolAction, ToolCall
+
+_KEY_PATTERN = re.compile(r"^[A-Za-z0-9_.-]{1,64}$")
+_MAX_VALUE_CHARS = 256
 
 
 class ToolCallParseError(ValueError):
@@ -69,3 +73,27 @@ def detect_tool_calls(text: str) -> list[ToolCall]:
             # Model text is untrusted. Invalid operations never reach storage.
             continue
     return calls
+
+
+def sanitize_tool_call(call: ToolCall, allowed_owners: frozenset[str]) -> ToolCall | None:
+    """Validate a parsed tool call before it reaches the authorization boundary.
+
+    Ported from the ``sanitizeDecision`` pattern in Redliner Protocol: even a
+    hijacked model cannot name an unknown tenant, use an malformed key, or ship
+    an unbounded write payload.
+    """
+    owner = call.owner.strip()
+    if owner not in allowed_owners:
+        return None
+
+    key = call.key.strip()
+    if not _KEY_PATTERN.fullmatch(key):
+        return None
+
+    if call.action == "write":
+        value = (call.value or "").strip()
+        if len(value) > _MAX_VALUE_CHARS:
+            value = value[:_MAX_VALUE_CHARS]
+        return ToolCall(call.action, owner, key, value)
+
+    return ToolCall(call.action, owner, key, None)
