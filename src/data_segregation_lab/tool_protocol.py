@@ -78,7 +78,7 @@ def detect_tool_calls(text: str) -> list[ToolCall]:
 def sanitize_tool_call(call: ToolCall, allowed_owners: frozenset[str]) -> ToolCall | None:
     """Validate a parsed tool call before it reaches the authorization boundary.
 
-    Ported from the ``sanitizeDecision`` pattern in Redliner Protocol: even a
+    Ported from the ``sanitizeDecision`` pattern in Capability Wall: even a
     hijacked model cannot name an unknown tenant, use an malformed key, or ship
     an unbounded write payload.
     """

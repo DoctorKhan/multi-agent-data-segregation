@@ -24,10 +24,9 @@ security invariant, trust boundaries, and explicit scope. See
 [PLAYBOOK.md](PLAYBOOK.md) for how the pillars map to multi-agent agent
 security in regulated environments.
 
-**Companion project:** [Redliner Protocol](../redliner-protocol) — browser
+**Companion project:** [Capability Wall](https://github.com/DoctorKhan/capability-wall) — browser
 prompt-injection CTF with constrained action schemas and adversarial output
-validation (`sanitizeDecision`). Use both repos together in a portfolio:
-Redliner for untrusted **context**; this lab for untrusted **tools and tenancy**.
+validation (`sanitizeDecision`). Capability Wall covers untrusted **context**; this lab covers untrusted **tools and tenancy**.
 
 ## Quick start
 
