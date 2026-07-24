@@ -143,7 +143,7 @@ class OpenRouterLLM:
             headers={
                 "Content-Type": "application/json",
                 "Authorization": f"Bearer {self._check_api_key()}",
-                "HTTP-Referer": "https://github.com/multi-agent-data-segregation",
+                "HTTP-Referer": "https://github.com/DoctorKhan/multi-agent-data-segregation",
                 "X-Title": "Multi-Agent Data Segregation",
             },
             method="POST",

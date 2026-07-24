@@ -2,12 +2,12 @@
 
 **Live demo:** https://doctorkhan.github.io/multi-agent-data-segregation/
 
-Run the interactive browser demo locally:
+Run the interactive browser demo locally (`just` lists every recipe):
 
 ```bash
-./run.sh install
-./run.sh dev       # http://localhost:5174
-./run.sh verify    # type-check, test, and build
+just install-web   # or `just install` for Python + browser deps
+just dev           # http://127.0.0.1:5174
+just verify        # type-check, test, and build
 ```
 
 > [!CAUTION]
@@ -40,10 +40,10 @@ validation (`sanitizeDecision`). Capability Wall covers untrusted **context**; t
 
 ## Quick start
 
-Install the locked dependencies:
+Install the Python lab (or `just install` for both Python and browser deps):
 
 ```bash
-uv sync
+just install-py
 ```
 
 Run the deterministic, offline comparison:
@@ -69,7 +69,9 @@ just reproduce-vulnerability
 Run every local quality and behavior check:
 
 ```bash
-just check
+just check          # Python lab
+just verify         # browser demo (type-check, test, build)
+just verify-all     # both
 ```
 
 Run a compact, repeated comparison (500 fresh runs per policy by default):
@@ -81,7 +83,9 @@ just repetitions --repetitions 25
 
 ## Code organization
 
-The package uses a `src/` layout so each responsibility has one home:
+Two surfaces share scenario logic but ship separately:
+
+**Python CLI lab** (`just demo`, `just check`) — terminal narration and CI:
 
 ```text
 src/data_segregation_lab/
@@ -99,8 +103,16 @@ src/data_segregation_lab/
 └── batch.py           # deterministic repetition entry point
 ```
 
+**Browser demo** (`just dev`, `just verify`) — offline step-through on GitHub Pages:
+
+```text
+client/                # Vite UI (step cards, comparison panel)
+shared/                # TypeScript mirror of scenario + presentation logic
+tests/demo.test.ts     # browser demo unit tests
+```
+
 Tests are split along the same boundaries. Both CLIs and all end-to-end tests
-use `ScenarioRunner`; the presentation module never executes storage operations.
+use `ScenarioRunner`; the presentation modules never execute storage operations.
 
 ## Explicit OpenRouter mode
 
