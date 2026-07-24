@@ -2,12 +2,12 @@
 
 **Live demo:** https://doctorkhan.github.io/multi-agent-data-segregation/
 
-Run the interactive browser demo locally:
+Run the interactive browser demo locally (`just` lists every recipe):
 
 ```bash
-./run.sh install
-./run.sh dev       # http://localhost:5174
-./run.sh verify    # type-check, test, and build
+just install-web   # or `just install` for Python + browser deps
+just dev           # http://127.0.0.1:5174
+just verify        # type-check, test, and build
 ```
 
 > [!CAUTION]
@@ -41,10 +41,10 @@ Capability Wall for untrusted **context**; this lab for untrusted **tools and te
 
 ## Quick start
 
-Install the locked dependencies:
+Install the Python lab (or `just install` for both Python and browser deps):
 
 ```bash
-uv sync
+just install-py
 ```
 
 Run the deterministic, offline comparison:
