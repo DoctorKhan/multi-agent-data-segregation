@@ -20,5 +20,8 @@ dist/
 # macOS metadata
 .DS_Store
 
+# Node demo client
+node_modules/
+
 # Accidental local wheel downloads
 *.whl

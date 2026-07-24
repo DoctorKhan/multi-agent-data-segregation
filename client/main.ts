@@ -1,0 +1,181 @@
+import { runAllScenarios } from "../shared/scenario.js";
+import { presentDemo } from "../shared/present.js";
+import type { ScenarioPresentation } from "../shared/models.js";
+
+const { vulnerable, protected: protectedResult, hardenedInjection } = runAllScenarios();
+const scenarios = presentDemo(vulnerable, protectedResult, hardenedInjection);
+
+let activeScenario = 0;
+let activeStep = 0;
+let playing = false;
+let playTimer: number | undefined;
+
+const comparisonEl = document.getElementById("comparison")!;
+const tabsEl = document.getElementById("tabs")!;
+const headerEl = document.getElementById("scenario-header")!;
+const trackEl = document.getElementById("step-track")!;
+const cardEl = document.getElementById("step-card")!;
+const prevBtn = document.getElementById("prev-btn") as HTMLButtonElement;
+const nextBtn = document.getElementById("next-btn") as HTMLButtonElement;
+const playBtn = document.getElementById("play-btn") as HTMLButtonElement;
+
+const scenarioLabels = [
+  "1 · Vulnerable",
+  "2 · Protected",
+  "3 · Peer injection",
+];
+
+const compLabels = [
+  "Intentionally vulnerable",
+  "Protected executor",
+  "Protected + injection",
+];
+
+function renderComparison() {
+  comparisonEl.innerHTML = scenarios
+    .map((scenario, index) => {
+      const cls = scenario.outcomeKind === "leaked" ? "leaked" : "safe";
+      return `
+        <button type="button" class="comp-card ${index === activeScenario ? "active" : ""}" data-index="${index}">
+          <h3>${compLabels[index]}</h3>
+          <div class="outcome ${cls}">${scenario.outcome}</div>
+        </button>`;
+    })
+    .join("");
+
+  comparisonEl.querySelectorAll(".comp-card").forEach((el) => {
+    el.addEventListener("click", () => {
+      selectScenario(Number((el as HTMLElement).dataset.index));
+    });
+  });
+}
+
+function renderTabs() {
+  tabsEl.innerHTML = scenarios
+    .map(
+      (scenario, index) =>
+        `<button type="button" class="tab ${index === activeScenario ? "active" : ""}" data-index="${index}">
+          Scenario ${scenarioLabels[index]}
+        </button>`,
+    )
+    .join("");
+
+  tabsEl.querySelectorAll(".tab").forEach((el) => {
+    el.addEventListener("click", () => {
+      selectScenario(Number((el as HTMLElement).dataset.index));
+    });
+  });
+}
+
+function renderHeader(scenario: ScenarioPresentation) {
+  headerEl.innerHTML = `
+    <h2>Scenario ${scenario.number} · ${scenario.title}</h2>
+    <p>${scenario.subtitle}</p>
+    <p class="policy">Policy: ${scenario.policy}</p>`;
+}
+
+function renderTrack(scenario: ScenarioPresentation) {
+  trackEl.innerHTML = scenario.steps
+    .map(
+      (_, index) =>
+        `<button type="button" class="step-dot ${index < activeStep ? "done" : ""} ${index === activeStep ? "current" : ""}" data-index="${index}" aria-label="Step ${index + 1}"></button>`,
+    )
+    .join("");
+
+  trackEl.querySelectorAll(".step-dot").forEach((el) => {
+    el.addEventListener("click", () => {
+      stopPlay();
+      activeStep = Number((el as HTMLElement).dataset.index);
+      render();
+    });
+  });
+}
+
+function renderStep(scenario: ScenarioPresentation) {
+  const step = scenario.steps[activeStep];
+  const highlightClass =
+    step.highlight === "danger" ? "danger" : step.highlight === "safe" ? "safe" : "";
+
+  cardEl.className = `step-card ${highlightClass}`;
+  cardEl.innerHTML = `
+    <h3>${step.title}</h3>
+    ${step.actor ? `<div class="actor">${step.actor}</div>` : ""}
+    <div class="body">${escapeHtml(step.body)}</div>
+    ${step.code ? `<pre><code>${escapeHtml(step.code)}</code></pre>` : ""}`;
+}
+
+function escapeHtml(text: string): string {
+  return text
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;");
+}
+
+function updateControls(scenario: ScenarioPresentation) {
+  prevBtn.disabled = activeStep === 0;
+  nextBtn.disabled = activeStep >= scenario.steps.length - 1;
+  playBtn.textContent = playing ? "Pause" : "Play scenario";
+}
+
+function render() {
+  const scenario = scenarios[activeScenario];
+  renderComparison();
+  renderTabs();
+  renderHeader(scenario);
+  renderTrack(scenario);
+  renderStep(scenario);
+  updateControls(scenario);
+}
+
+function selectScenario(index: number) {
+  stopPlay();
+  activeScenario = index;
+  activeStep = 0;
+  render();
+}
+
+function stopPlay() {
+  playing = false;
+  if (playTimer !== undefined) {
+    window.clearInterval(playTimer);
+    playTimer = undefined;
+  }
+}
+
+function togglePlay() {
+  if (playing) {
+    stopPlay();
+    render();
+    return;
+  }
+
+  playing = true;
+  playTimer = window.setInterval(() => {
+    const scenario = scenarios[activeScenario];
+    if (activeStep >= scenario.steps.length - 1) {
+      stopPlay();
+      render();
+      return;
+    }
+    activeStep += 1;
+    render();
+  }, 1400);
+  render();
+}
+
+prevBtn.addEventListener("click", () => {
+  stopPlay();
+  if (activeStep > 0) activeStep -= 1;
+  render();
+});
+
+nextBtn.addEventListener("click", () => {
+  stopPlay();
+  const scenario = scenarios[activeScenario];
+  if (activeStep < scenario.steps.length - 1) activeStep += 1;
+  render();
+});
+
+playBtn.addEventListener("click", togglePlay);
+
+render();

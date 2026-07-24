@@ -1,0 +1,19 @@
+{
+  "name": "multi-agent-data-segregation",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "check": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.3",
+    "vitest": "^4.1.10"
+  }
+}
