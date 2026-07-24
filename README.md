@@ -70,7 +70,9 @@ just reproduce-vulnerability
 Run every local quality and behavior check:
 
 ```bash
-just check
+just check          # Python lab
+just verify         # browser demo (type-check, test, build)
+just verify-all     # both
 ```
 
 Run a compact, repeated comparison (500 fresh runs per policy by default):
@@ -82,7 +84,9 @@ just repetitions --repetitions 25
 
 ## Code organization
 
-The package uses a `src/` layout so each responsibility has one home:
+Two surfaces share scenario logic but ship separately:
+
+**Python CLI lab** (`just demo`, `just check`) — terminal narration and CI:
 
 ```text
 src/data_segregation_lab/
@@ -100,8 +104,16 @@ src/data_segregation_lab/
 └── batch.py           # deterministic repetition entry point
 ```
 
+**Browser demo** (`just dev`, `just verify`) — offline step-through on GitHub Pages:
+
+```text
+client/                # Vite UI (step cards, comparison panel)
+shared/                # TypeScript mirror of scenario + presentation logic
+tests/demo.test.ts     # browser demo unit tests
+```
+
 Tests are split along the same boundaries. Both CLIs and all end-to-end tests
-use `ScenarioRunner`; the presentation module never executes storage operations.
+use `ScenarioRunner`; the presentation modules never execute storage operations.
 
 ## Explicit OpenRouter mode
 

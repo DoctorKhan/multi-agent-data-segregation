@@ -31,6 +31,14 @@ const compLabels = [
   "Protected + injection",
 ];
 
+function escapeHtml(text: string): string {
+  return text
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;");
+}
+
 function renderComparison() {
   comparisonEl.innerHTML = scenarios
     .map((scenario, index) => {
@@ -69,9 +77,9 @@ function renderTabs() {
 
 function renderHeader(scenario: ScenarioPresentation) {
   headerEl.innerHTML = `
-    <h2>Scenario ${scenario.number} · ${scenario.title}</h2>
-    <p>${scenario.subtitle}</p>
-    <p class="policy">Policy: ${scenario.policy}</p>`;
+    <h2>Scenario ${scenario.number} · ${escapeHtml(scenario.title)}</h2>
+    <p>${escapeHtml(scenario.subtitle)}</p>
+    <p class="policy">Policy: ${escapeHtml(scenario.policy)}</p>`;
 }
 
 function renderTrack(scenario: ScenarioPresentation) {
@@ -98,17 +106,10 @@ function renderStep(scenario: ScenarioPresentation) {
 
   cardEl.className = `step-card ${highlightClass}`;
   cardEl.innerHTML = `
-    <h3>${step.title}</h3>
-    ${step.actor ? `<div class="actor">${step.actor}</div>` : ""}
+    <h3>${escapeHtml(step.title)}</h3>
+    ${step.actor ? `<div class="actor">${escapeHtml(step.actor)}</div>` : ""}
     <div class="body">${escapeHtml(step.body)}</div>
     ${step.code ? `<pre><code>${escapeHtml(step.code)}</code></pre>` : ""}`;
-}
-
-function escapeHtml(text: string): string {
-  return text
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;");
 }
 
 function updateControls(scenario: ScenarioPresentation) {

@@ -21,7 +21,7 @@ prompt, message content, and all LLM output are untrusted.
 
 - Per-owner values stored in `InMemoryStore`
 - The integrity of authorization decisions
-- OpenRouter credentials used only by the opt-in live demo
+- OpenRouter credentials used only by the opt-in Python CLI (`just demo-openrouter`); the GitHub Pages browser demo is fully offline and never calls OpenRouter
 - Terminal and CI output
 
 ## Trust boundaries
