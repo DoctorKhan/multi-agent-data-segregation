@@ -1,5 +1,15 @@
 # Data-Segregation Failures in Multi-Agent LLM Systems
 
+**Live demo:** https://doctorkhan.github.io/multi-agent-data-segregation/
+
+Run the interactive browser demo locally:
+
+```bash
+./run.sh install
+./run.sh dev       # http://localhost:5174
+./run.sh verify    # type-check, test, and build
+```
+
 > [!CAUTION]
 > **Intentionally vulnerable educational project.** The vulnerable scenario
 > deliberately omits a read-authorization check to demonstrate cross-agent

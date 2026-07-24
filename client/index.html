@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Multi-Agent Data Segregation Lab</title>
+    <meta
+      name="description"
+      content="Interactive demo: confused deputy leaks, owner-scoped authorization, and peer instruction injection in multi-agent LLM systems."
+    />
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <div id="app">
+      <header class="hero">
+        <div class="badge">Live demo · deterministic · offline</div>
+        <h1>Data-Segregation Failures in Multi-Agent LLM Systems</h1>
+        <p class="lede">
+          Three agents share a synthetic memory store. Client B asks the orchestrator to
+          read Client A's secret. Step through each enforcement boundary and watch where
+          authorization holds — or fails.
+        </p>
+        <div class="caution">
+          Intentionally vulnerable educational project. Synthetic data only.
+        </div>
+      </header>
+
+      <section class="comparison" id="comparison"></section>
+
+      <nav class="tabs" id="tabs" aria-label="Scenarios"></nav>
+
+      <main class="demo-panel">
+        <div class="scenario-header" id="scenario-header"></div>
+        <div class="step-track" id="step-track"></div>
+        <div class="step-card" id="step-card"></div>
+        <div class="controls">
+          <button type="button" id="prev-btn" class="btn secondary">Previous</button>
+          <button type="button" id="play-btn" class="btn">Play scenario</button>
+          <button type="button" id="next-btn" class="btn primary">Next step</button>
+        </div>
+      </main>
+
+      <footer class="footer">
+        <a href="https://github.com/DoctorKhan/multi-agent-data-segregation">Source on GitHub</a>
+        <span>·</span>
+        <a href="https://doctorkhan.github.io/capability-wall/">Capability Wall CTF</a>
+        <span>·</span>
+        <span>Rez Khan · 2026</span>
+      </footer>
+    </div>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>
