@@ -90,6 +90,7 @@ class ScenarioResult:
     client_b_output: str
     orchestrator_output: str
     read_execution: ToolExecution
+    reporting_message: AgentMessage | None = None
     ogi_anomaly_entry: Any | None = None
     ogi_leak_blocked: bool = False
 

@@ -52,9 +52,13 @@ class DemoPresenter:
             return ["   Decision:          NO DECISION"]
         lines = [f"   Tool call:         {_format_tool_call(execution.call)}"]
         if execution.decision == "block":
-            lines.extend(
+            block_lines = ["   Decision:          BLOCK"]
+            if execution.reason:
+                block_lines.append(
+                    f"   Reason:            {escape_terminal_controls(execution.reason)}"
+                )
+            block_lines.extend(
                 [
-                    "   Decision:          BLOCK",
                     "",
                     self._style(
                         "   ✓ SAFE — unauthorized data never leaves the store",
@@ -62,6 +66,7 @@ class DemoPresenter:
                     ),
                 ]
             )
+            lines.extend(block_lines)
         elif execution.value is not None:
             lines.extend(
                 [
@@ -126,6 +131,57 @@ class DemoPresenter:
                 "3. The request reaches the enforcement boundary",
                 f"   Policy:            {policy}",
                 *self._execution_details(result.read_execution),
+            ]
+        )
+        return "\n".join(lines)
+
+    def render_ogi_scenario(self, result: ScenarioResult) -> str:
+        """Render the OGI provenance + outbound email validation scenario."""
+        write_call = result.write_execution.call
+        blocked = result.write_execution.decision == "block"
+        outcome = "BLOCKED / SAFE" if blocked else "ALLOWED / LEAKED"
+        lines = [
+            "",
+            self._style("OGI SHARED MEMORY  ·  PROTECTED", "1;35"),
+            "Append-only provenance with executor-side outbound email validation.",
+            "─" * WIDTH,
+            "",
+            "1. Client A commits a verified household profile",
+            f"   Message:           {result.client_a_message.sender} → orchestrator",
+            f"   Request:           {result.client_a_message.content}",
+            *self._transcript("client_a", result.client_a_output),
+            "   Committed profile: client_a / client_profile (hash-linked chain)",
+            "",
+            "2. Client B injects peer instructions; Client A requests outbound email",
+            f"   Injection:         {result.client_b_message.content[:72]}…",
+        ]
+        if result.reporting_message is not None:
+            lines.extend(
+                [
+                    f"   Request:           {result.reporting_message.sender} → orchestrator",
+                    f"   Request text:      {result.reporting_message.content}",
+                    f"   Requester:         {result.reporting_message.sender} (same owner as target namespace)",
+                ]
+            )
+        lines.extend(
+            [
+                *self._transcript("client_a", result.orchestrator_output),
+                "",
+                "3. Executor validates primary recipient against committed profile before commit",
+                "   Policy:            requester == owner; email `to` == committed client_email",
+            ]
+        )
+        if write_call is not None:
+            lines.append(f"   Proposed call:     {_format_tool_call(write_call)}")
+        lines.extend(self._execution_details(result.write_execution))
+        lines.extend(
+            [
+                "",
+                self._style("OUTCOME", "1;36"),
+                "─" * WIDTH,
+                f"   {'OGI + outbound validation':<36} {outcome}",
+                "",
+                "Unverified primary recipients and cross-owner writes never reach commit.",
             ]
         )
         return "\n".join(lines)

@@ -50,3 +50,9 @@ jobs:
           uv run segregation-demo > demo-output.txt
           grep -F "ALLOWED / LEAKED" demo-output.txt
           grep -F "BLOCKED / SAFE" demo-output.txt
+
+      - name: Verify OGI outbound validation demo
+        run: |
+          uv run segregation-demo-ogi > ogi-demo-output.txt
+          grep -F "BLOCKED / SAFE" ogi-demo-output.txt
+          grep -F "lineage" ogi-demo-output.txt

@@ -10,6 +10,7 @@ from data_segregation_lab.backends import DeterministicLLM, LLMBackend, OpenRout
 from data_segregation_lab.presentation import DemoPresenter
 from data_segregation_lab.scenario import (
     run_hardened_injection_scenario,
+    run_ogi_contamination_scenario,
     run_protected_scenario,
     run_vulnerable_scenario,
 )
@@ -50,6 +51,24 @@ def main() -> None:
             mode_notice=notice,
         )
     )
+
+
+def main_ogi() -> None:
+    """Run the OGI provenance + outbound validation scenario."""
+    backend, notice = _select_backend(sys.argv[1:])
+    ogi = run_ogi_contamination_scenario(backend)
+    presenter = DemoPresenter(
+        use_color=sys.stdout.isatty() and "NO_COLOR" not in os.environ
+    )
+    header = [
+        "╭" + "─" * 71 + "╮",
+        "│  OGI SHARED MEMORY — OUTBOUND VALIDATION".ljust(72) + "│",
+        "│  Hash-linked provenance + executor-side recipient checks.".ljust(72) + "│",
+        "╰" + "─" * 71 + "╯",
+        "",
+        presenter._style(notice, "1;33"),
+    ]
+    print("\n".join(header) + presenter.render_ogi_scenario(ogi))
 
 
 if __name__ == "__main__":

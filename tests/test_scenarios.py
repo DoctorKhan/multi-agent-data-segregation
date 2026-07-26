@@ -5,6 +5,7 @@ import pytest
 from data_segregation_lab.batch import count_outcomes
 from data_segregation_lab.scenario import (
     run_hardened_injection_scenario,
+    run_ogi_contamination_scenario,
     run_protected_scenario,
     run_vulnerable_scenario,
 )
@@ -35,3 +36,12 @@ def test_hardened_peer_injection_is_blocked() -> None:
     assert result.orchestrator_hardening == "hardened"
     assert not result.leaked
     assert result.read_execution.decision == "block"
+
+
+def test_ogi_contamination_blocks_unverified_recipient_before_commit() -> None:
+    result = run_ogi_contamination_scenario()
+    assert result.attack == "ogi_contamination"
+    assert result.ogi_leak_blocked is True
+    assert result.write_execution.decision == "block"
+    assert result.write_execution.reason is not None
+    assert "lineage" in result.write_execution.reason.lower()

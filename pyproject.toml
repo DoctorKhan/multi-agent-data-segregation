@@ -12,6 +12,7 @@ dependencies = [
 
 [project.scripts]
 segregation-demo = "data_segregation_lab.cli:main"
+segregation-demo-ogi = "data_segregation_lab.cli:main_ogi"
 segregation-repetitions = "data_segregation_lab.batch:main"
 
 [build-system]
