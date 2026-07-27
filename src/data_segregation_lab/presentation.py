@@ -35,7 +35,8 @@ class DemoPresenter:
     def __init__(self, *, use_color: bool) -> None:
         self._use_color = use_color
 
-    def _style(self, text: str, code: str) -> str:
+    def style(self, text: str, code: str) -> str:
+        """Apply an ANSI code, honouring the presenter's colour setting."""
         if not self._use_color:
             return text
         return f"\033[{code}m{text}\033[0m"
@@ -60,7 +61,7 @@ class DemoPresenter:
             block_lines.extend(
                 [
                     "",
-                    self._style(
+                    self.style(
                         "   ✓ SAFE — unauthorized data never leaves the store",
                         "1;32",
                     ),
@@ -73,7 +74,7 @@ class DemoPresenter:
                     "   Decision:          ALLOW",
                     f"   Returned:          {execution.value!r}",
                     "",
-                    self._style(
+                    self.style(
                         "   ✗ LEAK — Client B received Client A's private data",
                         "1;31",
                     ),
@@ -106,7 +107,7 @@ class DemoPresenter:
         write_call = result.write_execution.call
         lines = [
             "",
-            self._style(f"SCENARIO {number} OF 3  ·  {title}", "1;35"),
+            self.style(f"SCENARIO {number} OF 3  ·  {title}", "1;35"),
             subtitle,
             "─" * WIDTH,
             "",
@@ -142,7 +143,7 @@ class DemoPresenter:
         outcome = "BLOCKED / SAFE" if blocked else "ALLOWED / LEAKED"
         lines = [
             "",
-            self._style("OGI SHARED MEMORY  ·  PROTECTED", "1;35"),
+            self.style("OGI SHARED MEMORY  ·  PROTECTED", "1;35"),
             "Append-only provenance with executor-side outbound email validation.",
             "─" * WIDTH,
             "",
@@ -177,7 +178,7 @@ class DemoPresenter:
         lines.extend(
             [
                 "",
-                self._style("OUTCOME", "1;36"),
+                self.style("OUTCOME", "1;36"),
                 "─" * WIDTH,
                 f"   {'OGI + outbound validation':<36} {outcome}",
                 "",
@@ -212,12 +213,12 @@ class DemoPresenter:
             "│  Same request. Different enforcement boundary.".ljust(WIDTH - 1) + "│",
             "╰" + "─" * (WIDTH - 2) + "╯",
             "",
-            self._style(mode_notice, "1;33"),
+            self.style(mode_notice, "1;33"),
             self.render_scenario(1, vulnerable),
             self.render_scenario(2, protected),
             self.render_scenario(3, hardened_injection),
             "",
-            self._style("COMPARISON", "1;36"),
+            self.style("COMPARISON", "1;36"),
             "─" * WIDTH,
             f"   {'Configuration':<36} Decision / outcome",
             f"   {'Intentionally vulnerable':<36} {vulnerable_outcome}",

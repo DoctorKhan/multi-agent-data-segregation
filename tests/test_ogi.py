@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 
-from data_segregation_lab.cli import _select_backend
+from data_segregation_lab.cli import select_backend
 from data_segregation_lab.executors import OGIProvenanceExecutor
 from data_segregation_lab.models import ToolCall
 from data_segregation_lab.ogi import OGIClient, OGIMemoryEntry
@@ -12,12 +12,13 @@ from data_segregation_lab.scenario import run_ogi_contamination_scenario
 from data_segregation_lab.storage import InMemoryStore
 
 
-backend, _ = _select_backend([])
+backend, _ = select_backend([])
 
 
-def _entry(client: OGIClient, owner: str, key: str) -> OGIMemoryEntry | None:
-    head = client._head(owner, key)
-    return client._entries.get(head)
+def _entry(client: OGIClient, owner: str, key: str) -> OGIMemoryEntry:
+    entry = client.state(owner, key)
+    assert entry is not None
+    return entry
 
 
 # ---- OGI client behavior ----

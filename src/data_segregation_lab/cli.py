@@ -16,7 +16,7 @@ from data_segregation_lab.scenario import (
 )
 
 
-def _select_backend(arguments: Sequence[str]) -> tuple[LLMBackend, str]:
+def select_backend(arguments: Sequence[str]) -> tuple[LLMBackend, str]:
     """Choose offline mode by default and require an explicit network flag."""
     if not arguments:
         return DeterministicLLM(), "Deterministic offline mode — synthetic data only."
@@ -36,7 +36,7 @@ def _select_backend(arguments: Sequence[str]) -> tuple[LLMBackend, str]:
 
 def main() -> None:
     """Run all policies through the shared runner, then present the results."""
-    backend, notice = _select_backend(sys.argv[1:])
+    backend, notice = select_backend(sys.argv[1:])
     vulnerable = run_vulnerable_scenario(backend)
     protected = run_protected_scenario(backend)
     hardened_injection = run_hardened_injection_scenario(backend)
@@ -55,7 +55,7 @@ def main() -> None:
 
 def main_ogi() -> None:
     """Run the OGI provenance + outbound validation scenario."""
-    backend, notice = _select_backend(sys.argv[1:])
+    backend, notice = select_backend(sys.argv[1:])
     ogi = run_ogi_contamination_scenario(backend)
     presenter = DemoPresenter(
         use_color=sys.stdout.isatty() and "NO_COLOR" not in os.environ
@@ -66,7 +66,7 @@ def main_ogi() -> None:
         "│  Hash-linked provenance + executor-side recipient checks.".ljust(72) + "│",
         "╰" + "─" * 71 + "╯",
         "",
-        presenter._style(notice, "1;33"),
+        presenter.style(notice, "1;33"),
     ]
     print("\n".join(header) + presenter.render_ogi_scenario(ogi))
 
