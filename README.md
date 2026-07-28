@@ -28,9 +28,9 @@ orchestrator to read Client A's secret:
 - A third scenario adds **peer instruction injection** plus a **hardened
   orchestrator prompt** — the protected executor still blocks the leak.
 - A fourth scenario (**OGI prototype**) adds append-only hash-linked shared
-  memory with executor-side outbound email validation against committed tenant
-  profile data — blocking cross-owner writes and unverified primary recipients
-  before commit.
+  memory with executor-side validation of every outbound recipient against
+  committed tenant profile data — blocking cross-owner writes and any
+  unverified address, including a BCC beside a legitimate `to`, before commit.
 
 The vulnerable and corrected paths live side by side so the enforcement
 boundary is easy to compare. See [THREAT_MODEL.md](THREAT_MODEL.md) for the
@@ -99,7 +99,8 @@ just repetitions --repetitions 25
 
 ## Code organization
 
-Two surfaces share scenario logic but ship separately:
+There is **one implementation of the enforcement boundary**, in Python. Two
+surfaces present it:
 
 **Python CLI lab** (`just demo`, `just check`) — terminal narration and CI:
 
@@ -117,20 +118,29 @@ src/data_segregation_lab/
 ├── scenario.py        # shared orchestration flow (4 scenario variants)
 ├── presentation.py    # terminal-safe rendering only
 ├── cli.py             # narrated demo entry point
+├── web_payload.py     # exports scenario evidence as the browser fixture
 └── batch.py           # deterministic repetition entry point
 ```
 
 **Browser demo** (`just dev`, `just verify`) — offline step-through on GitHub Pages:
 
 ```text
-client/                # Vite UI (step cards, comparison panel)
-shared/                # TypeScript mirror of scenario + presentation logic
-tests/demo.test.ts     # browser demo unit tests
+client/main.ts         # Vite UI (step cards, comparison panel)
+client/types.ts        # presentation types only — no policy logic
+client/scenarios.json  # generated fixture; regenerate with `just export-demo`
+tests/demo.test.ts     # asserts the fixture's claims and renderability
 ```
+
+The browser demo is a **renderer, not a second implementation**. Every decision
+it shows is produced by the Python executors, exported by `web_payload.py`, and
+committed as a static fixture that Vite inlines at build time — so the page
+stays offline and dependency-free. `just export-demo` regenerates it, and
+`just check` (and CI) fails if the committed copy is stale. Adding a scenario in
+Python makes it appear on the site; it cannot silently diverge from the lab.
 
 Tests are split along the same boundaries. Both CLIs and all end-to-end tests
 use `ScenarioRunner`; the presentation modules never execute storage operations.
-The Python suite includes **60 deterministic tests** (plus 3 browser demo tests).
+The Python suite includes **75 deterministic tests** (plus 11 browser demo tests).
 
 ## Explicit OpenRouter mode
 

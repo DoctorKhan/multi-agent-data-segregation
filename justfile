@@ -27,6 +27,12 @@ repetitions *args: ## Repeat both deterministic policies (default: 500 times)
 test *args: ## Run Python unit tests (pass optional pytest arguments after --)
     uv run pytest -q {{args}}
 
+export-demo: ## Regenerate the browser demo fixture from the Python lab
+    uv run segregation-export-demo
+
+export-demo-check: ## Fail if the committed browser fixture is stale
+    uv run segregation-export-demo --check
+
 demo: ## Run the deterministic, offline vulnerability demonstration
     uv run segregation-demo
 
@@ -48,7 +54,7 @@ lint: ## Lint Python files with Ruff
 typecheck: ## Run strict static type checking
     uv run pyright
 
-check: lock-check lint typecheck test ## Verify lockfile, style, types, and Python behavior
+check: lock-check lint typecheck test export-demo-check ## Verify lockfile, style, types, Python behavior, and demo fixture freshness
 
 # --- Browser demo (GitHub Pages) ---
 

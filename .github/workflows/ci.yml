@@ -44,6 +44,11 @@ jobs:
       - name: Test
         run: uv run pytest -q
 
+      - name: Verify the browser demo fixture is current
+        # The browser demo renders generated data. If this drifts, the public
+        # site can show a defense the lab no longer implements.
+        run: uv run segregation-export-demo --check
+
       - name: Verify deterministic vulnerability demo
         # Check both sides of the teaching contract, not merely process exit 0.
         run: |

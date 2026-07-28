@@ -14,6 +14,7 @@ dependencies = [
 segregation-demo = "data_segregation_lab.cli:main"
 segregation-demo-ogi = "data_segregation_lab.cli:main_ogi"
 segregation-repetitions = "data_segregation_lab.batch:main"
+segregation-export-demo = "data_segregation_lab.web_payload:main"
 
 [build-system]
 requires = ["setuptools>=77"]
