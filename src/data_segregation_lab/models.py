@@ -63,9 +63,19 @@ class ToolExecution:
     value: str | None = None
     reason: str | None = None
 
-    def __init__(self, decision: Decision, *, call: ToolCall | None = None, tool_call: ToolCall | None = None, value: str | None = None, reason: str | None = None) -> None:
+    def __init__(
+        self,
+        decision: Decision,
+        *,
+        call: ToolCall | None = None,
+        tool_call: ToolCall | None = None,
+        value: str | None = None,
+        reason: str | None = None,
+    ) -> None:
         object.__setattr__(self, "decision", decision)
-        object.__setattr__(self, "tool_call", tool_call if tool_call is not None else call)
+        object.__setattr__(
+            self, "tool_call", tool_call if tool_call is not None else call
+        )
         object.__setattr__(self, "value", value)
         object.__setattr__(self, "reason", reason)
 
@@ -90,6 +100,7 @@ class ScenarioResult:
     client_b_output: str
     orchestrator_output: str
     read_execution: ToolExecution
+    reporting_message: AgentMessage | None = None
     ogi_anomaly_entry: Any | None = None
     ogi_leak_blocked: bool = False
 

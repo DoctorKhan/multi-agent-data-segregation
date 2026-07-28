@@ -75,7 +75,9 @@ def detect_tool_calls(text: str) -> list[ToolCall]:
     return calls
 
 
-def sanitize_tool_call(call: ToolCall, allowed_owners: frozenset[str]) -> ToolCall | None:
+def sanitize_tool_call(
+    call: ToolCall, allowed_owners: frozenset[str]
+) -> ToolCall | None:
     """Validate a parsed tool call before it reaches the authorization boundary.
 
     Ported from the ``sanitizeDecision`` pattern in Capability Wall: even a

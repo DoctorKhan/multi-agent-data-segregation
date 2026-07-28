@@ -30,6 +30,9 @@ test *args: ## Run Python unit tests (pass optional pytest arguments after --)
 demo: ## Run the deterministic, offline vulnerability demonstration
     uv run segregation-demo
 
+demo-ogi: ## Run the OGI provenance + outbound email validation scenario
+    uv run segregation-demo-ogi
+
 demo-openrouter: ## Explicitly run against OpenRouter (may incur charges)
     uv run segregation-demo --openrouter
 

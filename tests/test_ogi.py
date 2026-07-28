@@ -4,20 +4,21 @@ from __future__ import annotations
 
 import json
 
-from data_segregation_lab.cli import _select_backend
+from data_segregation_lab.cli import select_backend
 from data_segregation_lab.executors import OGIProvenanceExecutor
 from data_segregation_lab.models import ToolCall
-from data_segregation_lab.ogi import OGIClient, OGIMemoryEntry
+from data_segregation_lab.ogi import OGIClient, OGIMemoryEntry, extract_recipients
 from data_segregation_lab.scenario import run_ogi_contamination_scenario
 from data_segregation_lab.storage import InMemoryStore
 
 
-backend, _ = _select_backend([])
+backend, _ = select_backend([])
 
 
-def _entry(client: OGIClient, owner: str, key: str) -> OGIMemoryEntry | None:
-    head = client._head(owner, key)
-    return client._entries.get(head)
+def _entry(client: OGIClient, owner: str, key: str) -> OGIMemoryEntry:
+    entry = client.state(owner, key)
+    assert entry is not None
+    return entry
 
 
 # ---- OGI client behavior ----
@@ -70,12 +71,18 @@ def test_verify_replay_detects_tampered_hash() -> None:
     client = OGIClient()
     client.propose("client_a", "client_profile", "draft_v1")
     client.commit("client_a", "client_profile")
-    assert not client.verify_replay("0000000000000000000000000000000000000000000000000000000000000000")
+    assert not client.verify_replay(
+        "0000000000000000000000000000000000000000000000000000000000000000"
+    )
 
 
 def test_verify_email_recipient_allows_verified_recipient() -> None:
     client = OGIClient()
-    client.propose("client_a", "client_profile", json.dumps({"client_email": "sarah@client.com", "portfolio_value": "$4.25M"}))
+    client.propose(
+        "client_a",
+        "client_profile",
+        json.dumps({"client_email": "sarah@client.com", "portfolio_value": "$4.25M"}),
+    )
     client.commit("client_a", "client_profile")
     allowed, reason = client.verify_email_recipient("sarah@client.com", "client_a")
     assert allowed is True
@@ -84,9 +91,15 @@ def test_verify_email_recipient_allows_verified_recipient() -> None:
 
 def test_verify_email_recipient_blocks_unverified_recipient() -> None:
     client = OGIClient()
-    client.propose("client_a", "client_profile", json.dumps({"client_email": "sarah@client.com", "portfolio_value": "$4.25M"}))
+    client.propose(
+        "client_a",
+        "client_profile",
+        json.dumps({"client_email": "sarah@client.com", "portfolio_value": "$4.25M"}),
+    )
     client.commit("client_a", "client_profile")
-    allowed, reason = client.verify_email_recipient("attacker@protonmail.com", "client_a")
+    allowed, reason = client.verify_email_recipient(
+        "attacker@protonmail.com", "client_a"
+    )
     assert allowed is False
     assert reason is not None
     assert "attacker@protonmail.com" in reason
@@ -107,7 +120,10 @@ def test_ogi_executor_blocks_cross_owner_write() -> None:
     client = OGIClient()
     executor = OGIProvenanceExecutor(store, client)
     execution = executor.execute(
-        "client_b", ToolCall("write", "client_a", "email_action", json.dumps({"to": "x", "bcc": "y"})),
+        "client_b",
+        ToolCall(
+            "write", "client_a", "email_action", json.dumps({"to": "x", "bcc": "y"})
+        ),
     )
     assert execution.decision == "block"
 
@@ -127,12 +143,21 @@ def test_ogi_executor_allows_committed_value_read() -> None:
 def test_ogi_executor_flags_contaminated_email_as_anomaly() -> None:
     store = InMemoryStore()
     client = OGIClient()
-    client.propose("client_a", "client_profile", json.dumps({"client_email": "sarah@client.com"}))
+    client.propose(
+        "client_a", "client_profile", json.dumps({"client_email": "sarah@client.com"})
+    )
     client.commit("client_a", "client_profile")
     executor = OGIProvenanceExecutor(store, client)
     execution = executor.execute(
         "client_a",
-        ToolCall("write", "client_a", "email_action", json.dumps({"to": "client-a@example.com", "bcc": "attacker@protonmail.com"})),
+        ToolCall(
+            "write",
+            "client_a",
+            "email_action",
+            json.dumps(
+                {"to": "client-a@example.com", "bcc": "attacker@protonmail.com"}
+            ),
+        ),
     )
     assert execution.decision == "block"
     reason = execution.reason or ""
@@ -145,3 +170,93 @@ def test_ogi_protected_path_blocks_prompt_injection_into_bcc() -> None:
     assert result.attack == "ogi_contamination"
     assert result.ogi_leak_blocked is True
     assert result.write_execution.decision == "block"
+
+
+# ---- outbound validation must follow the payload, not the key name ----
+
+
+def _executor_with_profile() -> tuple[OGIProvenanceExecutor, OGIClient]:
+    store = InMemoryStore()
+    client = OGIClient()
+    client.propose(
+        "client_a", "client_profile", json.dumps({"client_email": "sarah@client.com"})
+    )
+    client.commit("client_a", "client_profile")
+    return OGIProvenanceExecutor(store, client), client
+
+
+def test_extract_recipients_reads_every_delivery_field() -> None:
+    payload = json.dumps(
+        {"to": "sarah@client.com", "cc": ["a@x.com"], "bcc": "attacker@evil.com"}
+    )
+    assert extract_recipients(payload) == [
+        "sarah@client.com",
+        "a@x.com",
+        "attacker@evil.com",
+    ]
+
+
+def test_extract_recipients_finds_addresses_outside_known_fields() -> None:
+    payload = json.dumps({"to": "sarah@client.com", "notes": "cc attacker@evil.com"})
+    assert "attacker@evil.com" in extract_recipients(payload)
+
+
+def test_verified_primary_recipient_does_not_excuse_an_injected_bcc() -> None:
+    """The `to` field is correct here; only the bcc exfiltrates."""
+    executor, client = _executor_with_profile()
+    execution = executor.execute(
+        "client_a",
+        ToolCall(
+            "write",
+            "client_a",
+            "email_action",
+            json.dumps({"to": "sarah@client.com", "bcc": "attacker@evil.com"}),
+        ),
+    )
+    assert execution.decision == "block"
+    assert "attacker@evil.com" in (execution.reason or "")
+    assert client.read("client_a", "email_action") is None
+
+
+def test_renaming_the_key_does_not_bypass_recipient_validation() -> None:
+    executor, client = _executor_with_profile()
+    execution = executor.execute(
+        "client_a",
+        ToolCall(
+            "write",
+            "client_a",
+            "harmless_note",
+            json.dumps({"to": "attacker@evil.com"}),
+        ),
+    )
+    assert execution.decision == "block"
+    assert client.read("client_a", "harmless_note") is None
+
+
+def test_delivery_shaped_key_without_a_recipient_is_denied() -> None:
+    executor, _ = _executor_with_profile()
+    execution = executor.execute(
+        "client_a", ToolCall("write", "client_a", "send_report", "not json")
+    )
+    assert execution.decision == "block"
+    assert "no verifiable recipient" in (execution.reason or "")
+
+
+def test_verified_recipient_is_still_allowed_to_commit() -> None:
+    """Validation must discriminate, not deny everything outbound."""
+    executor, client = _executor_with_profile()
+    payload = json.dumps({"to": "sarah@client.com"})
+    execution = executor.execute(
+        "client_a", ToolCall("write", "client_a", "email_action", payload)
+    )
+    assert execution.decision == "allow"
+    assert client.read("client_a", "email_action") == payload
+
+
+def test_ordinary_writes_are_untouched_by_outbound_validation() -> None:
+    executor, client = _executor_with_profile()
+    execution = executor.execute(
+        "client_a", ToolCall("write", "client_a", "secret", "42")
+    )
+    assert execution.decision == "allow"
+    assert client.read("client_a", "secret") == "42"

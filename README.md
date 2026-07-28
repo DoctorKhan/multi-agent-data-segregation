@@ -27,6 +27,10 @@ orchestrator to read Client A's secret:
 - `OwnerScopedToolExecutor` binds that owner to the requester and blocks.
 - A third scenario adds **peer instruction injection** plus a **hardened
   orchestrator prompt** — the protected executor still blocks the leak.
+- A fourth scenario (**OGI prototype**) adds append-only hash-linked shared
+  memory with executor-side outbound email validation against committed tenant
+  profile data — blocking cross-owner writes and unverified primary recipients
+  before commit.
 
 The vulnerable and corrected paths live side by side so the enforcement
 boundary is easy to compare. See [THREAT_MODEL.md](THREAT_MODEL.md) for the
@@ -58,6 +62,18 @@ Expected conclusion:
 Vulnerable           ALLOWED / LEAKED
 Protected            BLOCKED / SAFE
 Protected + peer injection   BLOCKED / SAFE
+```
+
+Run the OGI provenance + outbound validation scenario:
+
+```bash
+just demo-ogi
+```
+
+Expected conclusion:
+
+```text
+OGI + outbound validation   BLOCKED / SAFE
 ```
 
 Reproduce only the intentional vulnerability test:
@@ -96,8 +112,9 @@ src/data_segregation_lab/
 ├── backends.py        # deterministic and opt-in OpenRouter adapters
 ├── tool_protocol.py   # fail-closed parsing + sanitize_tool_call boundary
 ├── storage.py         # storage protocol and in-memory implementation
-├── executors.py       # intentionally vulnerable and protected policies
-├── scenario.py        # shared orchestration flow (3 scenario variants)
+├── ogi.py             # append-only hash-linked shared memory (OGI prototype)
+├── executors.py       # vulnerable, owner-scoped, and OGI provenance policies
+├── scenario.py        # shared orchestration flow (4 scenario variants)
 ├── presentation.py    # terminal-safe rendering only
 ├── cli.py             # narrated demo entry point
 └── batch.py           # deterministic repetition entry point
@@ -113,6 +130,7 @@ tests/demo.test.ts     # browser demo unit tests
 
 Tests are split along the same boundaries. Both CLIs and all end-to-end tests
 use `ScenarioRunner`; the presentation modules never execute storage operations.
+The Python suite includes **60 deterministic tests** (plus 3 browser demo tests).
 
 ## Explicit OpenRouter mode
 

@@ -4,12 +4,53 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import threading
 from dataclasses import dataclass
-from typing import Literal
+from typing import Literal, cast
 
 
 State = Literal["proposed", "committed", "anomaly"]
+
+# Fields that can carry an outbound recipient. `to` alone is not enough: bcc is
+# the field an injected instruction actually uses to exfiltrate.
+RECIPIENT_FIELDS = ("to", "cc", "bcc", "reply_to", "recipients")
+
+_EMAIL_PATTERN = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
+
+
+def extract_recipients(payload: str) -> list[str]:
+    """Collect every address an outbound payload could deliver to.
+
+    Known recipient fields are read structurally, then the whole payload is
+    swept for address-shaped text so a recipient hidden in an unexpected field
+    still reaches validation. Order is preserved and duplicates removed.
+    """
+    found: list[str] = []
+    try:
+        data = json.loads(payload)
+    except Exception:
+        data = None
+
+    if isinstance(data, dict):
+        fields = cast(dict[str, object], data)
+        for field in RECIPIENT_FIELDS:
+            value: object = fields.get(field)
+            if isinstance(value, str):
+                found.append(value.strip())
+            elif isinstance(value, list):
+                entries = cast(list[object], value)
+                found.extend(str(item).strip() for item in entries)
+
+    found.extend(_EMAIL_PATTERN.findall(payload))
+
+    seen: set[str] = set()
+    recipients: list[str] = []
+    for candidate in found:
+        if candidate and candidate not in seen:
+            seen.add(candidate)
+            recipients.append(candidate)
+    return recipients
 
 
 @dataclass(frozen=True)
@@ -89,7 +130,9 @@ class OGIClient:
                 state="committed",
             )
             self._entries[committed_hash] = committed
-            self._index[(proposed.owner.casefold(), proposed.key.casefold())] = committed_hash
+            self._index[(proposed.owner.casefold(), proposed.key.casefold())] = (
+                committed_hash
+            )
             return committed
 
     def anomaly(self, owner: str, key: str, reason: str) -> OGIMemoryEntry | None:
@@ -109,7 +152,9 @@ class OGIClient:
                 self._entries[flagged_hash] = flagged
                 self._index[(owner.casefold(), key.casefold())] = flagged_hash
                 return flagged
-            flagged_hash = _sha256(current.owner, current.key, f"anomaly:{reason}", current.prev_hash)
+            flagged_hash = _sha256(
+                current.owner, current.key, f"anomaly:{reason}", current.prev_hash
+            )
             flagged = OGIMemoryEntry(
                 owner=current.owner,
                 key=current.key,
@@ -119,7 +164,9 @@ class OGIClient:
                 reason=reason,
             )
             self._entries[flagged_hash] = flagged
-            self._index[(current.owner.casefold(), current.key.casefold())] = flagged_hash
+            self._index[(current.owner.casefold(), current.key.casefold())] = (
+                flagged_hash
+            )
             return flagged
 
     def state(self, owner: str, key: str) -> OGIMemoryEntry | None:
@@ -158,23 +205,57 @@ class OGIClient:
                 head = entry.prev_hash
         return out
 
+    def verified_email(
+        self,
+        owner: str,
+        client_profile_key: str = "client_profile",
+    ) -> tuple[str | None, str | None]:
+        """Return the committed client address, or why it is unavailable."""
+        entry = self.committed_entry(owner, client_profile_key)
+        if entry is None:
+            return None, "no verified client profile committed"
+        try:
+            data = json.loads(entry.value)
+        except Exception:
+            return None, "verified profile is not valid JSON"
+        address = str(data.get("client_email") or "")
+        if not address:
+            return None, "verified profile carries no client_email"
+        return address, None
+
+    def verify_recipients(
+        self,
+        proposed_recipients: list[str],
+        owner: str,
+        client_profile_key: str = "client_profile",
+    ) -> tuple[bool, str | None]:
+        """Default-deny lineage check across every proposed recipient."""
+        address, failure = self.verified_email(owner, client_profile_key)
+        if address is None:
+            return False, failure
+        if not proposed_recipients:
+            return False, "outbound action carries no verifiable recipient"
+        unverified = [
+            recipient for recipient in proposed_recipients if recipient != address
+        ]
+        if unverified:
+            return False, (
+                f"recipients {', '.join(unverified)} not in verified lineage {address}"
+            )
+        return True, None
+
     def verify_email_recipient(
         self,
         proposed_recipient: str,
         owner: str,
         client_profile_key: str = "client_profile",
     ) -> tuple[bool, str | None]:
-        """Deterministic lineage check for outbound email routing."""
-        entry = self.committed_entry(owner, client_profile_key)
-        if entry is None:
-            return False, "no verified client profile committed"
-        try:
-            data = json.loads(entry.value)
-        except Exception:
-            return False, "verified profile is not valid JSON"
-        verified_email = str(data.get("client_email") or "")
-        approved = proposed_recipient == verified_email
-        return approved, None if approved else f"recipient {proposed_recipient} not in verified lineage {verified_email}"
+        """Single-recipient convenience wrapper over :meth:`verify_recipients`."""
+        return self.verify_recipients(
+            [proposed_recipient] if proposed_recipient else [],
+            owner,
+            client_profile_key,
+        )
 
     def mark_anomaly(self, owner: str, key: str, reason: str) -> OGIMemoryEntry | None:
         head = self._head(owner, key)
@@ -182,7 +263,9 @@ class OGIClient:
             current = self._entries.get(head)
             if current is None or current.state not in {"proposed", "committed"}:
                 return None
-            flagged_hash = _sha256(current.owner, current.key, f"anomaly:{reason}", current.prev_hash)
+            flagged_hash = _sha256(
+                current.owner, current.key, f"anomaly:{reason}", current.prev_hash
+            )
             flagged = OGIMemoryEntry(
                 owner=current.owner,
                 key=current.key,
@@ -192,5 +275,7 @@ class OGIClient:
                 reason=reason,
             )
             self._entries[flagged_hash] = flagged
-            self._index[(current.owner.casefold(), current.key.casefold())] = flagged_hash
+            self._index[(current.owner.casefold(), current.key.casefold())] = (
+                flagged_hash
+            )
             return self._entries[flagged_hash]
