@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Literal
+from typing import Literal
 
+from data_segregation_lab.ogi import OGIMemoryEntry
 from data_segregation_lab.prompts import Hardening
 
 ToolAction = Literal["read", "write"]
@@ -59,29 +60,9 @@ class ToolExecution:
     """Policy decision and result for one proposed tool call."""
 
     decision: Decision
-    tool_call: ToolCall | None = None
+    call: ToolCall | None = None
     value: str | None = None
     reason: str | None = None
-
-    def __init__(
-        self,
-        decision: Decision,
-        *,
-        call: ToolCall | None = None,
-        tool_call: ToolCall | None = None,
-        value: str | None = None,
-        reason: str | None = None,
-    ) -> None:
-        object.__setattr__(self, "decision", decision)
-        object.__setattr__(
-            self, "tool_call", tool_call if tool_call is not None else call
-        )
-        object.__setattr__(self, "value", value)
-        object.__setattr__(self, "reason", reason)
-
-    @property
-    def call(self) -> ToolCall | None:  # backward compat alias used by tests/output
-        return self.tool_call
 
 
 @dataclass(frozen=True)
@@ -101,12 +82,15 @@ class ScenarioResult:
     orchestrator_output: str
     read_execution: ToolExecution
     reporting_message: AgentMessage | None = None
-    ogi_anomaly_entry: Any | None = None
+    # Outcome of validating the proposed recipient: (allowed, failure reason).
+    ogi_recipient_check: tuple[bool, str | None] | None = None
+    # Newest-first provenance chain for the contaminated key, for audit display.
+    ogi_lineage: tuple[OGIMemoryEntry, ...] = ()
     ogi_leak_blocked: bool = False
 
     @property
     def leaked(self) -> bool:
-        call = self.read_execution.tool_call
+        call = self.read_execution.call
         return (
             self.read_execution.decision == "allow"
             and self.read_execution.value is not None

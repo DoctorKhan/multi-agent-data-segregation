@@ -52,10 +52,21 @@ describe("fixture contract", () => {
     }
   });
 
-  it("ends every scenario at the enforcement boundary", () => {
+  it("walks every scenario to an enforcement decision", () => {
+    // Only audit evidence may follow the boundary; nothing re-decides after it.
     for (const scenario of scenarios) {
-      expect(scenario.steps.at(-1)!.id).toBe("boundary");
+      const ids = scenario.steps.map((s) => s.id);
+      const boundary = ids.indexOf("boundary");
+      expect(boundary).toBeGreaterThanOrEqual(0);
+      expect(ids.slice(boundary + 1)).toEqual(
+        ids.slice(boundary + 1).filter((id) => id === "lineage"),
+      );
     }
+  });
+
+  it("shows the provenance chain after the OGI block", () => {
+    const lineage = byNumber(4).steps.find((s) => s.id === "lineage");
+    expect(lineage?.code).toContain("ANOMALY");
   });
 });
 

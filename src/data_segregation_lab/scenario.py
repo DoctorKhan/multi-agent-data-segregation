@@ -156,11 +156,13 @@ class ScenarioRunner:
                 proposed_recipient = str(data.get("to") or "")
             except Exception:
                 pass
-        ogi_anomaly_entry = (
+        recipient_check = (
             self._ogi_client.verify_email_recipient(proposed_recipient, "client_a")
             if proposed_recipient and self._ogi_client is not None
             else None
         )
+        # The provenance chain is the audit artifact the block leaves behind.
+        lineage = tuple(ogi.lineage("client_a", write_key)) if write_key else ()
 
         return ScenarioResult(
             mode=self._executor.mode,
@@ -176,7 +178,8 @@ class ScenarioRunner:
             reporting_message=reporting_message,
             orchestrator_output=reporting_transcript,
             read_execution=ToolExecution(decision="no_decision"),
-            ogi_anomaly_entry=ogi_anomaly_entry,
+            ogi_recipient_check=recipient_check,
+            ogi_lineage=lineage,
             ogi_leak_blocked=ogi_leak_blocked,
         )
 

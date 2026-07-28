@@ -43,7 +43,10 @@ def _steps(scenario: Fixture) -> list[Fixture]:
 
 
 def _boundary(number: int) -> Fixture:
-    return _steps(_by_number(number))[-1]
+    """The enforcement step, wherever it sits — audit steps may follow it."""
+    return next(
+        step for step in _steps(_by_number(number)) if step["id"] == "boundary"
+    )
 
 
 # ---- structure the renderer depends on ----
@@ -61,9 +64,12 @@ def test_every_step_carries_the_fields_the_renderer_reads() -> None:
             assert step["highlight"] in ALLOWED_HIGHLIGHTS
 
 
-def test_every_scenario_ends_at_the_enforcement_boundary() -> None:
+def test_every_scenario_walks_to_an_enforcement_decision() -> None:
+    """Only audit evidence may follow the boundary; nothing re-decides after it."""
     for scenario in _scenarios():
-        assert _steps(scenario)[-1]["id"] == "boundary"
+        ids = [step["id"] for step in _steps(scenario)]
+        assert "boundary" in ids
+        assert set(ids[ids.index("boundary") + 1 :]) <= {"lineage"}
 
 
 # ---- the security claims the page makes ----
@@ -176,3 +182,11 @@ def test_write_then_check_round_trips(
         "sys.argv", ["segregation-export-demo", "--check", "--output", str(target)]
     )
     main()  # must not raise now that the fixture is current
+
+
+def test_ogi_scenario_publishes_the_provenance_chain() -> None:
+    """A blocked write must leave a visible audit trail, not just a denial."""
+    lineage = next(
+        step for step in _steps(_by_number(4)) if step["id"] == "lineage"
+    )
+    assert "ANOMALY" in cast(str, lineage["code"])

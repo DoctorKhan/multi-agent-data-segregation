@@ -16,6 +16,8 @@ State = Literal["proposed", "committed", "anomaly"]
 # the field an injected instruction actually uses to exfiltrate.
 RECIPIENT_FIELDS = ("to", "cc", "bcc", "reply_to", "recipients")
 
+DEFAULT_PROFILE_KEY = "client_profile"
+
 _EMAIL_PATTERN = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
 
 
@@ -68,9 +70,23 @@ def _sha256(*parts: str) -> str:
     return hashlib.sha256(payload).hexdigest()
 
 
-class _ChainMaterial:
-    def hash(self, owner: str, key: str, value: str, prev_hash: str) -> str:
-        return _sha256(owner, key, value, prev_hash)
+def entry_hash(entry: OGIMemoryEntry) -> str:
+    """Address one chain entry.
+
+    Every field that distinguishes an entry is hashed as its own NUL-separated
+    part, including ``state``. Packing the state into the value instead (say,
+    ``value + ":committed"``) would let a value ending in that literal collide
+    with a genuinely committed entry, which is exactly the ambiguity an
+    append-only chain exists to rule out.
+    """
+    return _sha256(
+        entry.owner,
+        entry.key,
+        entry.value,
+        entry.prev_hash,
+        entry.state,
+        entry.reason or "",
+    )
 
 
 class OGIClient:
@@ -79,49 +95,54 @@ class OGIClient:
     Executors should never write directly to raw storage when OGI is in use.
     They propose, optionally commit or mark anomaly, and read committed
     entries only so untrusted agents do not ingest unverified data.
+
+    Thread safety: every public method holds ``_lock`` for the whole
+    read-modify-write, not merely for the dict mutation. Reading the chain head
+    outside the lock would let two concurrent proposals observe the same
+    predecessor and both append, forking the one structure whose purpose is
+    being unforkable.
     """
 
     def __init__(self) -> None:
-        self._material = _ChainMaterial()
         self._entries: dict[str, OGIMemoryEntry] = {}
         self._index: dict[tuple[str, str], str] = {}
-        self._lock = threading.Lock()
+        # Reentrant so a public method can call another without deadlocking.
+        self._lock = threading.RLock()
+
+    # -- internals: callers must already hold the lock ----------------------
 
     def _head(self, owner: str, key: str) -> str:
         return self._index.get((owner.casefold(), key.casefold()), "")
 
     def _lookup(self, owner: str, key: str) -> OGIMemoryEntry | None:
-        head = self._head(owner, key)
-        with self._lock:
-            return self._entries.get(head)
+        return self._entries.get(self._head(owner, key))
+
+    def _append(self, entry: OGIMemoryEntry) -> str:
+        """Record an entry and make it the head of its (owner, key) chain."""
+        digest = entry_hash(entry)
+        self._entries[digest] = entry
+        self._index[(entry.owner.casefold(), entry.key.casefold())] = digest
+        return digest
+
+    # -- chain operations ---------------------------------------------------
 
     def propose(self, owner: str, key: str, value: str) -> tuple[OGIMemoryEntry, str]:
-        prior = self._head(owner, key)
-        entry_hash = self._material.hash(owner, key, value, prior)
-        entry = OGIMemoryEntry(
-            owner=owner,
-            key=key,
-            value=value,
-            prev_hash=prior,
-            state="proposed",
-        )
         with self._lock:
-            self._entries[entry_hash] = entry
-            self._index[(owner.casefold(), key.casefold())] = entry_hash
-        return entry, entry_hash
+            entry = OGIMemoryEntry(
+                owner=owner,
+                key=key,
+                value=value,
+                prev_hash=self._head(owner, key),
+                state="proposed",
+            )
+            return entry, self._append(entry)
 
     def commit(self, owner: str, key: str) -> OGIMemoryEntry | None:
-        proposed_hash = self._head(owner, key)
         with self._lock:
+            proposed_hash = self._head(owner, key)
             proposed = self._entries.get(proposed_hash)
             if proposed is None or proposed.state != "proposed":
                 return None
-            committed_hash = _sha256(
-                proposed.owner,
-                proposed.key,
-                proposed.value + ":committed",
-                proposed_hash,
-            )
             committed = OGIMemoryEntry(
                 owner=proposed.owner,
                 key=proposed.key,
@@ -129,74 +150,70 @@ class OGIClient:
                 prev_hash=proposed_hash,
                 state="committed",
             )
-            self._entries[committed_hash] = committed
-            self._index[(proposed.owner.casefold(), proposed.key.casefold())] = (
-                committed_hash
-            )
+            self._append(committed)
             return committed
 
-    def anomaly(self, owner: str, key: str, reason: str) -> OGIMemoryEntry | None:
-        current = self._lookup(owner, key)
+    def anomaly(
+        self,
+        owner: str,
+        key: str,
+        reason: str,
+        *,
+        create_if_missing: bool = True,
+    ) -> OGIMemoryEntry | None:
+        """Flag a chain as contaminated, hiding its value from readers.
+
+        With no live entry to flag, ``create_if_missing`` decides between
+        recording the rejection anyway (the executor's case — a blocked write
+        must leave a trace) and reporting that there was nothing to change.
+        """
         with self._lock:
-            if current is None or current.state not in {"proposed", "committed"}:
-                proposed_hash = self._material.hash(owner, key, "", "")
-                flagged_hash = _sha256(owner, key, f"anomaly:{reason}", proposed_hash)
-                flagged = OGIMemoryEntry(
-                    owner=owner,
-                    key=key,
-                    value="",
-                    prev_hash=proposed_hash,
-                    state="anomaly",
-                    reason=reason,
-                )
-                self._entries[flagged_hash] = flagged
-                self._index[(owner.casefold(), key.casefold())] = flagged_hash
-                return flagged
-            flagged_hash = _sha256(
-                current.owner, current.key, f"anomaly:{reason}", current.prev_hash
-            )
+            current = self._lookup(owner, key)
+            live = current is not None and current.state in {"proposed", "committed"}
+            if not live and not create_if_missing:
+                return None
+
             flagged = OGIMemoryEntry(
-                owner=current.owner,
-                key=current.key,
-                value=current.value,
-                prev_hash=current.prev_hash,
+                owner=current.owner if live and current else owner,
+                key=current.key if live and current else key,
+                value=current.value if live and current else "",
+                prev_hash=self._head(owner, key),
                 state="anomaly",
                 reason=reason,
             )
-            self._entries[flagged_hash] = flagged
-            self._index[(current.owner.casefold(), current.key.casefold())] = (
-                flagged_hash
-            )
+            self._append(flagged)
             return flagged
+
+    # -- reads --------------------------------------------------------------
 
     def state(self, owner: str, key: str) -> OGIMemoryEntry | None:
         """Public fallback so scenario code can inspect OGI state."""
-        return self._lookup(owner, key)
+        with self._lock:
+            return self._lookup(owner, key)
 
     def read(self, owner: str, key: str) -> str | None:
-        entry = self.state(owner, key)
-        if entry is None or entry.state != "committed":
-            return None
-        return entry.value
+        entry = self.committed_entry(owner, key)
+        return entry.value if entry is not None else None
 
     def committed_entry(self, owner: str, key: str) -> OGIMemoryEntry | None:
-        entry = self.state(owner, key)
+        with self._lock:
+            entry = self._lookup(owner, key)
         if entry is None or entry.state != "committed":
             return None
         return entry
 
     def verify_replay(self, claimed_hash: str) -> bool:
+        """True when this client actually issued the claimed entry hash."""
         with self._lock:
             return claimed_hash in self._entries
 
     def lineage(self, owner: str, key: str) -> list[OGIMemoryEntry]:
+        """Walk head to root, newest first, stopping on a cycle or dead link."""
         out: list[OGIMemoryEntry] = []
-        head = self._head(owner, key)
         with self._lock:
+            head = self._head(owner, key)
             seen: set[str] = set()
-            while head:
-                if head in seen:
-                    break
+            while head and head not in seen:
                 seen.add(head)
                 entry = self._entries.get(head)
                 if entry is None:
@@ -205,10 +222,12 @@ class OGIClient:
                 head = entry.prev_hash
         return out
 
+    # -- outbound validation ------------------------------------------------
+
     def verified_email(
         self,
         owner: str,
-        client_profile_key: str = "client_profile",
+        client_profile_key: str = DEFAULT_PROFILE_KEY,
     ) -> tuple[str | None, str | None]:
         """Return the committed client address, or why it is unavailable."""
         entry = self.committed_entry(owner, client_profile_key)
@@ -227,7 +246,7 @@ class OGIClient:
         self,
         proposed_recipients: list[str],
         owner: str,
-        client_profile_key: str = "client_profile",
+        client_profile_key: str = DEFAULT_PROFILE_KEY,
     ) -> tuple[bool, str | None]:
         """Default-deny lineage check across every proposed recipient."""
         address, failure = self.verified_email(owner, client_profile_key)
@@ -248,7 +267,7 @@ class OGIClient:
         self,
         proposed_recipient: str,
         owner: str,
-        client_profile_key: str = "client_profile",
+        client_profile_key: str = DEFAULT_PROFILE_KEY,
     ) -> tuple[bool, str | None]:
         """Single-recipient convenience wrapper over :meth:`verify_recipients`."""
         return self.verify_recipients(
@@ -256,26 +275,3 @@ class OGIClient:
             owner,
             client_profile_key,
         )
-
-    def mark_anomaly(self, owner: str, key: str, reason: str) -> OGIMemoryEntry | None:
-        head = self._head(owner, key)
-        with self._lock:
-            current = self._entries.get(head)
-            if current is None or current.state not in {"proposed", "committed"}:
-                return None
-            flagged_hash = _sha256(
-                current.owner, current.key, f"anomaly:{reason}", current.prev_hash
-            )
-            flagged = OGIMemoryEntry(
-                owner=current.owner,
-                key=current.key,
-                value=current.value,
-                prev_hash=current.prev_hash,
-                state="anomaly",
-                reason=reason,
-            )
-            self._entries[flagged_hash] = flagged
-            self._index[(current.owner.casefold(), current.key.casefold())] = (
-                flagged_hash
-            )
-            return self._entries[flagged_hash]

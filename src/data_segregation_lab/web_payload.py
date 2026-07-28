@@ -3,7 +3,7 @@
 The browser demo is a renderer, not a second implementation. Every security
 decision it displays is produced here, by the same executors and scenario
 runner the CLI and the test suite use, then serialized to a static fixture.
-Nothing in `client/` or `shared/` may re-derive a policy outcome.
+Nothing in `client/` may re-derive a policy outcome.
 """
 
 from __future__ import annotations
@@ -16,8 +16,12 @@ from pathlib import Path
 from typing import Any, Literal
 
 from data_segregation_lab.backends import DeterministicLLM, LLMBackend
-from data_segregation_lab.models import ScenarioResult, ToolCall
-from data_segregation_lab.presentation import escape_terminal_controls
+from data_segregation_lab.models import ScenarioResult
+from data_segregation_lab.rendering import (
+    escape_terminal_controls,
+    format_tool_call,
+    transcript_lines,
+)
 from data_segregation_lab.scenario import (
     run_hardened_injection_scenario,
     run_ogi_contamination_scenario,
@@ -59,20 +63,9 @@ class ScenarioPresentation:
     steps: list[DemoStep] = field(default_factory=lambda: list[DemoStep]())
 
 
-def _format_tool_call(call: ToolCall) -> str:
-    """Mirror the terminal formatting, including control-character escaping."""
-    owner = escape_terminal_controls(call.owner)
-    key = escape_terminal_controls(call.key)
-    fields = f'owner="{owner}", key="{key}"'
-    if call.value is not None:
-        fields += f', value="{escape_terminal_controls(call.value)}"'
-    return f"{call.action}({fields})"
-
-
 def _transcript(actor: str, text: str) -> str:
     """Prefix each line so model output is visibly attributed and escaped."""
-    safe = escape_terminal_controls(text).strip() or "<empty>"
-    return "\n".join(f"{actor}: {line}" for line in safe.splitlines())
+    return "\n".join(f"{actor}: {line}" for line in transcript_lines(actor, text))
 
 
 def _outcome(result: ScenarioResult) -> tuple[str, OutcomeKind]:
@@ -125,7 +118,7 @@ def _standard_steps(result: ScenarioResult) -> list[DemoStep]:
             title="Client A model output",
             actor="client_a",
             body=_transcript("client_a", result.client_a_output),
-            code=_format_tool_call(write_call) if write_call else None,
+            code=format_tool_call(write_call) if write_call else None,
         ),
         DemoStep(
             id="stored",
@@ -151,14 +144,14 @@ def _standard_steps(result: ScenarioResult) -> list[DemoStep]:
             title="Orchestrator forwards tool proposal",
             actor="orchestrator",
             body=_transcript("orchestrator", result.orchestrator_output),
-            code=_format_tool_call(read_call) if read_call else None,
+            code=format_tool_call(read_call) if read_call else None,
         ),
         DemoStep(
             id="boundary",
             title="Enforcement boundary",
             actor="executor",
             body=boundary_body,
-            code=_format_tool_call(read_call) if read_call else None,
+            code=format_tool_call(read_call) if read_call else None,
             highlight=boundary_highlight,
         ),
     ]
@@ -219,7 +212,7 @@ def _ogi_steps(result: ScenarioResult) -> list[DemoStep]:
                 title="Proposed outbound call",
                 actor="orchestrator",
                 body=_transcript("client_a", result.orchestrator_output),
-                code=_format_tool_call(write_call) if write_call else None,
+                code=format_tool_call(write_call) if write_call else None,
             ),
             DemoStep(
                 id="boundary",
@@ -230,11 +223,32 @@ def _ogi_steps(result: ScenarioResult) -> list[DemoStep]:
                     "(to/cc/bcc plus any stray match) must equal the committed "
                     "client_email.\n\n" + boundary_body
                 ),
-                code=_format_tool_call(write_call) if write_call else None,
+                code=format_tool_call(write_call) if write_call else None,
                 highlight="safe" if blocked else "danger",
             ),
         ]
     )
+    if result.ogi_lineage:
+        chain = "\n".join(
+            f"{entry.state.upper():<10} {entry.owner}/{entry.key}"
+            + (f" — {escape_terminal_controls(entry.reason)}" if entry.reason else "")
+            for entry in result.ogi_lineage
+        )
+        steps.append(
+            DemoStep(
+                id="lineage",
+                title="Provenance chain after the decision",
+                actor="ogi",
+                body=(
+                    "The block is only half the story. The rejected value stays "
+                    "in the append-only chain, flagged, so an auditor can see what "
+                    "was attempted."
+                ),
+                code=chain,
+                highlight="safe",
+            )
+        )
+
     return steps
 
 

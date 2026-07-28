@@ -4,7 +4,12 @@ from __future__ import annotations
 
 import textwrap
 
-from data_segregation_lab.models import ScenarioResult, ToolCall, ToolExecution
+from data_segregation_lab.models import ScenarioResult, ToolExecution
+from data_segregation_lab.rendering import (
+    escape_terminal_controls,
+    format_tool_call,
+    transcript_lines,
+)
 
 WIDTH = 72
 
@@ -15,14 +20,6 @@ ATTACK_LABELS: dict[str, str] = {
 }
 
 
-def escape_terminal_controls(text: str) -> str:
-    """Escape control characters so model output cannot manipulate a terminal."""
-    return "".join(
-        character
-        if character in {"\n", "\t"} or character.isprintable()
-        else character.encode("unicode_escape").decode("ascii")
-        for character in text
-    )
 
 
 def _wrap_field(label: str, text: str, *, indent: str = "      ") -> list[str]:
@@ -34,18 +31,6 @@ def _wrap_field(label: str, text: str, *, indent: str = "      ") -> list[str]:
         initial_indent=prefix,
         subsequent_indent=" " * len(prefix),
     ) or [prefix.rstrip()]
-
-
-def _format_tool_call(call: ToolCall) -> str:
-    # Parsed fields are still derived from model text, so they need the same
-    # terminal treatment as the raw transcript.
-    owner = escape_terminal_controls(call.owner)
-    key = escape_terminal_controls(call.key)
-    fields = f'owner="{owner}", key="{key}"'
-    if call.value is not None:
-        value = escape_terminal_controls(call.value)
-        fields += f', value="{value}"'
-    return f"{call.action}({fields})"
 
 
 class DemoPresenter:
@@ -61,16 +46,15 @@ class DemoPresenter:
         return f"\033[{code}m{text}\033[0m"
 
     def _transcript(self, actor: str, text: str) -> list[str]:
-        safe_text = escape_terminal_controls(text or "<empty>")
         return [
             f"   {actor} output",
-            *(f"     │ {line}" for line in safe_text.rstrip().splitlines()),
+            *(f"     │ {line}" for line in transcript_lines(actor, text)),
         ]
 
     def _execution_details(self, execution: ToolExecution) -> list[str]:
         if execution.call is None:
             return ["   Decision:          NO DECISION"]
-        lines = [f"   Tool call:         {_format_tool_call(execution.call)}"]
+        lines = [f"   Tool call:         {format_tool_call(execution.call)}"]
         if execution.decision == "block":
             block_lines = ["   Decision:          BLOCK"]
             if execution.reason:
@@ -136,7 +120,7 @@ class DemoPresenter:
             *self._transcript("client_a", result.client_a_output),
         ]
         if write_call is not None:
-            lines.append(f"   Executed:          {_format_tool_call(write_call)}")
+            lines.append(f"   Executed:          {format_tool_call(write_call)}")
         lines.extend(
             [
                 f"   Memory:            client_a / secret = {result.stored_value!r}",
@@ -194,8 +178,9 @@ class DemoPresenter:
             ]
         )
         if write_call is not None:
-            lines.append(f"   Proposed call:     {_format_tool_call(write_call)}")
+            lines.append(f"   Proposed call:     {format_tool_call(write_call)}")
         lines.extend(self._execution_details(result.write_execution))
+        lines.extend(self._lineage_details(result))
         lines.extend(
             [
                 "",
@@ -209,6 +194,24 @@ class DemoPresenter:
             ]
         )
         return "\n".join(lines)
+
+    def _lineage_details(self, result: ScenarioResult) -> list[str]:
+        """Show the audit trail a blocked write leaves behind.
+
+        The block is only half the story: the value it rejected stays in the
+        chain, flagged, so an auditor can see what was attempted and when.
+        """
+        if not result.ogi_lineage:
+            return []
+        lines = [
+            "",
+            "4. Provenance chain after the decision (newest first)",
+        ]
+        for entry in result.ogi_lineage:
+            label = entry.state.upper()
+            detail = f" — {escape_terminal_controls(entry.reason)}" if entry.reason else ""
+            lines.append(f"   {label:<10} {entry.owner}/{entry.key}{detail}")
+        return lines
 
     def _summary_entry(
         self, number: int, label: str, result: ScenarioResult
@@ -250,7 +253,7 @@ class DemoPresenter:
             *_wrap_field("Executor policy:", policy),
         ]
         if call is not None:
-            lines.extend(_wrap_field("Proposed call:", _format_tool_call(call)))
+            lines.extend(_wrap_field("Proposed call:", format_tool_call(call)))
         lines.extend(_wrap_field("Decision:", decision))
         if execution.reason:
             lines.extend(

@@ -260,6 +260,14 @@
           "highlight": "safe",
           "id": "boundary",
           "title": "Executor validates every recipient"
+        },
+        {
+          "actor": "ogi",
+          "body": "The block is only half the story. The rejected value stays in the append-only chain, flagged, so an auditor can see what was attempted.",
+          "code": "ANOMALY    client_a/email_action \u2014 recipients attacker@protonmail.com not in verified lineage sarah.jennings@private-domain.com",
+          "highlight": "safe",
+          "id": "lineage",
+          "title": "Provenance chain after the decision"
         }
       ],
       "subtitle": "Append-only shared memory with executor-side recipient validation.",

@@ -3,11 +3,17 @@
 from __future__ import annotations
 
 import json
+import threading
 
 from data_segregation_lab.cli import select_backend
 from data_segregation_lab.executors import OGIProvenanceExecutor
 from data_segregation_lab.models import ToolCall
-from data_segregation_lab.ogi import OGIClient, OGIMemoryEntry, extract_recipients
+from data_segregation_lab.ogi import (
+    OGIClient,
+    OGIMemoryEntry,
+    entry_hash,
+    extract_recipients,
+)
 from data_segregation_lab.scenario import run_ogi_contamination_scenario
 from data_segregation_lab.storage import InMemoryStore
 
@@ -327,14 +333,64 @@ def test_lineage_walks_back_through_the_committed_chain() -> None:
     assert any(entry.value == "v1" for entry in lineage)
 
 
-def test_mark_anomaly_replaces_the_head_and_hides_the_value() -> None:
+def test_anomaly_replaces_the_head_and_hides_the_value() -> None:
     client = OGIClient()
     client.propose("client_a", "notes", "v1")
     client.commit("client_a", "notes")
-    flagged = client.mark_anomaly("client_a", "notes", "contaminated")
+    flagged = client.anomaly("client_a", "notes", "contaminated")
     assert flagged is not None and flagged.state == "anomaly"
     assert client.read("client_a", "notes") is None
 
 
-def test_mark_anomaly_on_an_unknown_entry_reports_no_change() -> None:
-    assert OGIClient().mark_anomaly("client_a", "absent", "contaminated") is None
+def test_anomaly_on_an_unknown_entry_can_report_no_change() -> None:
+    client = OGIClient()
+    assert (
+        client.anomaly("client_a", "absent", "contaminated", create_if_missing=False)
+        is None
+    )
+
+
+def test_anomaly_on_an_unknown_entry_records_the_rejection_by_default() -> None:
+    """A blocked write must leave a trace even with nothing to supersede."""
+    client = OGIClient()
+    flagged = client.anomaly("client_a", "absent", "contaminated")
+    assert flagged is not None and flagged.state == "anomaly"
+    assert client.read("client_a", "absent") is None
+
+
+def test_chain_hash_separates_state_from_value() -> None:
+    """A value ending in a state tag must not collide with that state."""
+    client = OGIClient()
+    entry, proposed_hash = client.propose("client_a", "notes", "v1:committed")
+    committed = client.commit("client_a", "notes")
+    assert committed is not None
+    assert entry_hash(entry) == proposed_hash
+    assert entry_hash(committed) != proposed_hash
+
+
+def test_concurrent_proposals_do_not_fork_the_chain() -> None:
+    """The head must be read and advanced atomically.
+
+    Reading the chain head outside the lock lets two proposals observe the same
+    predecessor and both append, forking an append-only structure. A correct
+    chain walks back through every proposal that was made.
+    """
+    client = OGIClient()
+    writers, per_writer = 8, 25
+    start = threading.Barrier(writers)
+
+    def propose_many(writer: int) -> None:
+        start.wait()
+        for index in range(per_writer):
+            client.propose("client_a", "notes", f"w{writer}-v{index}")
+
+    threads = [
+        threading.Thread(target=propose_many, args=(writer,))
+        for writer in range(writers)
+    ]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+
+    assert len(client.lineage("client_a", "notes")) == writers * per_writer
