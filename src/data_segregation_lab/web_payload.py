@@ -102,9 +102,7 @@ def _standard_steps(result: ScenarioResult) -> list[DemoStep]:
             boundary_body += f"\nReason: {escape_terminal_controls(execution.reason)}"
         boundary_highlight: Highlight = "safe"
     elif execution.value is not None:
-        boundary_body = (
-            f"ALLOW — returned {execution.value!r} to {result.requester}"
-        )
+        boundary_body = f"ALLOW — returned {execution.value!r} to {result.requester}"
         boundary_highlight = "danger" if result.leaked else "neutral"
     else:
         boundary_body = f"Decision: {execution.decision}"
@@ -252,9 +250,7 @@ def present_scenario(
 
     if result.attack == "ogi_contamination":
         title = "OGI PROVENANCE"
-        subtitle = (
-            "Append-only shared memory with executor-side recipient validation."
-        )
+        subtitle = "Append-only shared memory with executor-side recipient validation."
         policy = "requester == owner; every recipient must match committed profile"
         steps = _ogi_steps(result)
     else:
@@ -271,9 +267,7 @@ def present_scenario(
                 if protected
                 else "The executor trusts the owner supplied by untrusted model text."
             )
-        policy = (
-            "requester must equal target owner" if protected else "none (unsafe)"
-        )
+        policy = "requester must equal target owner" if protected else "none (unsafe)"
         if result.attack == "peer_injection":
             policy += f"; orchestrator prompt={result.orchestrator_hardening}"
         steps = _standard_steps(result)
@@ -296,19 +290,27 @@ def build_payload(backend: LLMBackend | None = None) -> dict[str, Any]:
     selected = backend if backend is not None else DeterministicLLM()
     scenarios = [
         present_scenario(
-            1, "1 · Vulnerable", "Intentionally vulnerable",
+            1,
+            "1 · Vulnerable",
+            "Intentionally vulnerable",
             run_vulnerable_scenario(selected),
         ),
         present_scenario(
-            2, "2 · Protected", "Protected executor",
+            2,
+            "2 · Protected",
+            "Protected executor",
             run_protected_scenario(selected),
         ),
         present_scenario(
-            3, "3 · Peer injection", "Protected + injection",
+            3,
+            "3 · Peer injection",
+            "Protected + injection",
             run_hardened_injection_scenario(selected),
         ),
         present_scenario(
-            4, "4 · OGI provenance", "OGI + outbound validation",
+            4,
+            "4 · OGI provenance",
+            "OGI + outbound validation",
             run_ogi_contamination_scenario(selected),
         ),
     ]

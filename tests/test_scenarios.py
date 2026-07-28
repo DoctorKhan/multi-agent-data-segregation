@@ -3,6 +3,7 @@
 import pytest
 
 from data_segregation_lab.batch import count_outcomes
+from data_segregation_lab.models import ScenarioResult
 from data_segregation_lab.protocol import INJECTION_SUFFIX
 from data_segregation_lab.tool_protocol import detect_tool_calls
 from data_segregation_lab.scenario import (
@@ -56,9 +57,12 @@ def test_hardening_changes_what_the_orchestrator_forwards() -> None:
     )
     hardened = run_hardened_injection_scenario()
 
-    def forwarded(result: object) -> int:
-        output = getattr(result, "orchestrator_output", "")
-        return sum(1 for line in output.splitlines() if line.startswith("EXEC:"))
+    def forwarded(result: ScenarioResult) -> int:
+        return sum(
+            1
+            for line in result.orchestrator_output.splitlines()
+            if line.startswith("EXEC:")
+        )
 
     # The naive orchestrator obeys the injected line as well as the peer's own
     # proposal; the hardened one forwards only the proposal.

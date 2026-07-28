@@ -260,3 +260,81 @@ def test_ordinary_writes_are_untouched_by_outbound_validation() -> None:
     )
     assert execution.decision == "allow"
     assert client.read("client_a", "secret") == "42"
+
+
+# ---- deny paths that would otherwise fail open ----
+
+
+def test_profile_that_is_not_json_denies_every_recipient() -> None:
+    client = OGIClient()
+    client.propose("client_a", "client_profile", "not json at all")
+    client.commit("client_a", "client_profile")
+    allowed, reason = client.verify_recipients(["sarah@client.com"], "client_a")
+    assert allowed is False
+    assert reason == "verified profile is not valid JSON"
+
+
+def test_profile_without_an_address_denies_every_recipient() -> None:
+    client = OGIClient()
+    client.propose("client_a", "client_profile", json.dumps({"portfolio": "$1"}))
+    client.commit("client_a", "client_profile")
+    allowed, reason = client.verify_recipients(["sarah@client.com"], "client_a")
+    assert allowed is False
+    assert reason == "verified profile carries no client_email"
+
+
+def test_an_empty_recipient_list_is_denied_not_waved_through() -> None:
+    client = OGIClient()
+    client.propose(
+        "client_a", "client_profile", json.dumps({"client_email": "sarah@client.com"})
+    )
+    client.commit("client_a", "client_profile")
+    allowed, reason = client.verify_recipients([], "client_a")
+    assert allowed is False
+    assert reason == "outbound action carries no verifiable recipient"
+
+
+def test_a_proposed_but_uncommitted_profile_does_not_authorize_delivery() -> None:
+    client = OGIClient()
+    client.propose(
+        "client_a", "client_profile", json.dumps({"client_email": "sarah@client.com"})
+    )
+    allowed, reason = client.verify_recipients(["sarah@client.com"], "client_a")
+    assert allowed is False
+    assert reason == "no verified client profile committed"
+
+
+# ---- provenance chain ----
+
+
+def test_verify_replay_accepts_a_hash_the_client_issued() -> None:
+    client = OGIClient()
+    _, entry_hash = client.propose("client_a", "client_profile", "draft_v1")
+    assert client.verify_replay(entry_hash) is True
+
+
+def test_lineage_walks_back_through_the_committed_chain() -> None:
+    client = OGIClient()
+    client.propose("client_a", "notes", "v1")
+    client.commit("client_a", "notes")
+    client.propose("client_a", "notes", "v2")
+    client.commit("client_a", "notes")
+
+    lineage = client.lineage("client_a", "notes")
+    assert [entry.state for entry in lineage[:2]] == ["committed", "proposed"]
+    assert [entry.value for entry in lineage[:2]] == ["v2", "v2"]
+    # The earlier revision is still reachable, so an audit can see the history.
+    assert any(entry.value == "v1" for entry in lineage)
+
+
+def test_mark_anomaly_replaces_the_head_and_hides_the_value() -> None:
+    client = OGIClient()
+    client.propose("client_a", "notes", "v1")
+    client.commit("client_a", "notes")
+    flagged = client.mark_anomaly("client_a", "notes", "contaminated")
+    assert flagged is not None and flagged.state == "anomaly"
+    assert client.read("client_a", "notes") is None
+
+
+def test_mark_anomaly_on_an_unknown_entry_reports_no_change() -> None:
+    assert OGIClient().mark_anomaly("client_a", "absent", "contaminated") is None

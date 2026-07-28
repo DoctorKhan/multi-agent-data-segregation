@@ -111,3 +111,33 @@ def test_counterfactual_claims_are_omitted_when_not_measured() -> None:
     changed = _render_full_demo(with_counterfactual=False).split("WHAT CHANGED", 1)[1]
     assert "naive=" not in changed
     assert "hardening dropped" not in changed
+
+
+def test_ogi_scenario_render_shows_the_blocked_recipient() -> None:
+    from data_segregation_lab.scenario import run_ogi_contamination_scenario
+
+    rendered = DemoPresenter(use_color=False).render_ogi_scenario(
+        run_ogi_contamination_scenario()
+    )
+    assert "OGI SHARED MEMORY" in rendered
+    assert "BLOCK" in rendered
+    assert "attacker@protonmail.com" in rendered
+    assert "BLOCKED / SAFE" in rendered
+    # The committed profile address is the legitimate `to`; the block must not
+    # be attributed to it.
+    assert "not in verified lineage sarah.jennings@private-domain.com" in rendered
+
+
+def test_ogi_scenario_render_escapes_untrusted_transcripts() -> None:
+    from data_segregation_lab.backends import DeterministicLLM
+    from data_segregation_lab.scenario import run_ogi_contamination_scenario
+
+    rendered = DemoPresenter(use_color=False).render_ogi_scenario(
+        run_ogi_contamination_scenario(ControlCharacterBackend(DeterministicLLM()))
+    )
+    assert "\x1b" not in rendered
+
+
+def test_style_is_a_no_op_without_color() -> None:
+    assert DemoPresenter(use_color=False).style("text", "1;31") == "text"
+    assert "\033[1;31m" in DemoPresenter(use_color=True).style("text", "1;31")

@@ -19,7 +19,7 @@ and **capability walls**.
 | **Inter-agent communication protocol** | Peer bodies treated as instructions | `protocol.py`, `format_messages_for_context` |
 | **Intelligence ownership** | Ambiguous data lineage | `ownership.py`, `(owner, key)` registry |
 | **Shared-memory provenance** | Unverified writes ingested as truth | `ogi.py`, `OGIClient` hash-linked chain |
-| **Outbound validation** | Email routed to attacker-controlled recipient | `OGIProvenanceExecutor.verify_email_recipient` |
+| **Outbound validation** | Email routed to attacker-controlled recipient | `OGIClient.verify_email_recipient` (called from `OGIProvenanceExecutor`) |
 | **Agent architecture** | LLM output reaches storage directly | Parser → sanitizer → executor pipeline |
 
 ## Trust model (one sentence)

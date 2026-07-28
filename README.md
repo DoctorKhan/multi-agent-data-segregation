@@ -59,9 +59,9 @@ just demo
 Expected conclusion:
 
 ```text
-Vulnerable           ALLOWED / LEAKED
-Protected            BLOCKED / SAFE
-Protected + peer injection   BLOCKED / SAFE
+Intentionally vulnerable             ALLOWED / LEAKED
+Protected (confused deputy)          BLOCKED / SAFE
+Protected + peer injection           BLOCKED / SAFE
 ```
 
 Run the OGI provenance + outbound validation scenario:
@@ -126,9 +126,11 @@ src/data_segregation_lab/
 
 ```text
 client/main.ts         # Vite UI (step cards, comparison panel)
+client/render.ts       # escaped HTML builders for scenario cards
 client/types.ts        # presentation types only — no policy logic
 client/scenarios.json  # generated fixture; regenerate with `just export-demo`
 tests/demo.test.ts     # asserts the fixture's claims and renderability
+tests/render.test.ts   # HTML escaping and card markup regression
 ```
 
 The browser demo is a **renderer, not a second implementation**. Every decision
@@ -140,7 +142,8 @@ Python makes it appear on the site; it cannot silently diverge from the lab.
 
 Tests are split along the same boundaries. Both CLIs and all end-to-end tests
 use `ScenarioRunner`; the presentation modules never execute storage operations.
-The Python suite includes **75 deterministic tests** (plus 11 browser demo tests).
+The Python suite includes **97 deterministic tests** (plus **21** browser demo
+tests).
 
 ## Explicit OpenRouter mode
 
