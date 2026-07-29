@@ -105,12 +105,15 @@ unnoticed regression.
 
 ## Mitigations
 
-`OwnerScopedToolExecutor` checks `requester == owner` before every read or write
-and defaults to denial. The paired mitigation tests prove that the same request
-is blocked before the store is touched.
+The pure `authorize_owner_scope` policy checks `requester == owner` before every
+read or write and defaults to denial. `OwnerScopedToolExecutor` is the thin
+effectful shell that applies that decision before touching the store. The paired
+mitigation tests exercise the policy independently and prove that the same
+request is blocked before storage mutation.
 
 `OGIProvenanceExecutor` adds:
 
+- Side-effect-free extraction and policy evaluation before ordered OGI effects
 - Append-only hash-linked provenance (`propose` / `commit` / `anomaly`)
 - Reads only from committed OGI entries
 - Executor-side outbound validation of every recipient (`to`/`cc`/`bcc` and any

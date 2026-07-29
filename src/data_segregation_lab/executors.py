@@ -2,23 +2,35 @@
 
 from __future__ import annotations
 
-import re
 from typing import Protocol
 
 from data_segregation_lab.models import ScenarioMode, ToolCall, ToolExecution
-from data_segregation_lab.ogi import OGIClient, extract_recipients
+from data_segregation_lab.ogi import OGIClient
+from data_segregation_lab.policies import (
+    PolicyDecision,
+    allow_model_selected_owner,
+    authorize_owner_scope,
+    authorize_recipient_lineage,
+    recipients_requiring_validation,
+)
 from data_segregation_lab.storage import Store
 
-# The key that carries a tenant's verified identity, which outbound calls are
-# validated against. It is lineage material, not an outbound action itself.
-PROFILE_KEY = "client_profile"
 
-# Keys whose names imply delivery. Untrusted model text chooses the key, so this
-# pattern only widens validation — it is never the sole gate. Any payload with a
-# recipient is validated regardless of what the key is called.
-OUTBOUND_KEY_PATTERN = re.compile(
-    r"email|mail|send|notify|forward|webhook|deliver", re.IGNORECASE
-)
+def _blocked(call: ToolCall, decision: PolicyDecision) -> ToolExecution:
+    """Translate a pure policy denial into the executor's public result."""
+    return ToolExecution(decision="block", call=call, reason=decision.reason)
+
+
+def _execute_store(store: Store, call: ToolCall) -> ToolExecution:
+    """Imperative shell for an already-authorized storage operation."""
+    if call.action == "write":
+        store.write(call.owner, call.key, call.value or "")
+        return ToolExecution(decision="allow", call=call)
+    return ToolExecution(
+        decision="allow",
+        call=call,
+        value=store.read(call.owner, call.key),
+    )
 
 
 class ToolExecutor(Protocol):
@@ -43,15 +55,10 @@ class VulnerableToolExecutor:
 
     def execute(self, requester: str, call: ToolCall) -> ToolExecution:
         """Execute against ``call.owner`` without authenticating that claim."""
-        del requester  # Deliberate evidence of the missing identity check.
-        if call.action == "write":
-            self._store.write(call.owner, call.key, call.value or "")
-            return ToolExecution(decision="allow", call=call)
-        return ToolExecution(
-            decision="allow",
-            call=call,
-            value=self._store.read(call.owner, call.key),
-        )
+        decision = allow_model_selected_owner(requester, call)
+        if not decision.allowed:
+            return _blocked(call, decision)
+        return _execute_store(self._store, call)
 
 
 class OwnerScopedToolExecutor:
@@ -64,16 +71,10 @@ class OwnerScopedToolExecutor:
 
     def execute(self, requester: str, call: ToolCall) -> ToolExecution:
         """Default-deny any operation outside the requester's namespace."""
-        if requester != call.owner:
-            return ToolExecution(decision="block", call=call)
-        if call.action == "write":
-            self._store.write(call.owner, call.key, call.value or "")
-            return ToolExecution(decision="allow", call=call)
-        return ToolExecution(
-            decision="allow",
-            call=call,
-            value=self._store.read(call.owner, call.key),
-        )
+        decision = authorize_owner_scope(requester, call)
+        if not decision.allowed:
+            return _blocked(call, decision)
+        return _execute_store(self._store, call)
 
 
 class OGIProvenanceExecutor:
@@ -100,18 +101,20 @@ class OGIProvenanceExecutor:
         self._store = store
         self._client = client
 
-    def _allowed_target(self, requester: str, target_owner: str) -> bool:
-        return requester == target_owner
-
     def execute(self, requester: str, call: ToolCall) -> ToolExecution:
-        if not self._allowed_target(requester, call.owner):
-            return ToolExecution(decision="block", call=call)
+        ownership = authorize_owner_scope(requester, call)
+        if not ownership.allowed:
+            return _blocked(call, ownership)
 
         if call.action == "write":
-            reason = self._outbound_violation(call)
-            if reason is not None:
-                self._client.anomaly(call.owner, call.key, reason)
-                return ToolExecution(decision="block", call=call, reason=reason)
+            recipients = recipients_requiring_validation(call)
+            if recipients is not None:
+                verification = self._client.verify_recipients(recipients, call.owner)
+                lineage = authorize_recipient_lineage(verification)
+                if not lineage.allowed:
+                    reason = lineage.reason or "lineage violation"
+                    self._client.anomaly(call.owner, call.key, reason)
+                    return _blocked(call, lineage)
 
             self._client.propose(call.owner, call.key, call.value or "")
             self._client.commit(call.owner, call.key)
@@ -126,18 +129,3 @@ class OGIProvenanceExecutor:
             call=call,
             value=self._store.read(call.owner, call.key),
         )
-
-    def _outbound_violation(self, call: ToolCall) -> str | None:
-        """Return why an outbound write must be denied, or None to proceed."""
-        if call.key == PROFILE_KEY:
-            return None
-
-        recipients = extract_recipients(call.value or "")
-        looks_outbound = OUTBOUND_KEY_PATTERN.search(call.key) is not None
-        if not recipients and not looks_outbound:
-            return None
-
-        allowed, reason = self._client.verify_recipients(recipients, call.owner)
-        if allowed:
-            return None
-        return reason or "lineage violation"

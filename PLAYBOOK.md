@@ -15,12 +15,12 @@ and **capability walls**.
 | Pillar | What breaks without it | Lab artifact |
 | --- | --- | --- |
 | **Multi-agent collaboration** | Orchestrator becomes a confused deputy | `ScenarioRunner`, three synthetic agents |
-| **Data segregation** | Cross-tenant reads/writes | `OwnerScopedToolExecutor`, `IntelligenceRegistry` |
+| **Data segregation** | Cross-tenant reads/writes | `authorize_owner_scope`, `OwnerScopedToolExecutor` |
 | **Inter-agent communication protocol** | Peer bodies treated as instructions | `protocol.py`, `format_messages_for_context` |
 | **Intelligence ownership** | Ambiguous data lineage | `ownership.py`, `(owner, key)` registry |
 | **Shared-memory provenance** | Unverified writes ingested as truth | `ogi.py`, `OGIClient` hash-linked chain |
 | **Outbound validation** | Email routed to attacker-controlled recipient | `OGIClient.verify_email_recipient` (called from `OGIProvenanceExecutor`) |
-| **Agent architecture** | LLM output reaches storage directly | Parser → sanitizer → executor pipeline |
+| **Agent architecture** | LLM output reaches storage directly | Parser → sanitizer → pure policy → executor pipeline |
 
 ## Trust model (one sentence)
 
@@ -37,8 +37,9 @@ and **capability walls**.
    (`tool_protocol.py`).
 4. **Output sanitization** — reject unknown tenants, malformed keys, unbounded values
    (`sanitize_tool_call`, ported from Capability Wall's boundary pattern).
-5. **Authorization at execution** — `requester == owner` before any storage touch
-   (`OwnerScopedToolExecutor`). This is the control that must hold in production.
+5. **Authorization at execution** — evaluate the pure `authorize_owner_scope`
+   policy, then require `requester == owner` before the executor touches storage.
+   This is the control that must hold in production.
 6. **Provenance + outbound validation (prototype)** — append-only hash-linked
    shared memory (`OGIClient`); for sensitive outbound actions, validate against
    committed tenant profile data before commit (`OGIProvenanceExecutor`).

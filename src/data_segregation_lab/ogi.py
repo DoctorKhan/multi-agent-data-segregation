@@ -6,6 +6,7 @@ import hashlib
 import json
 import re
 import threading
+from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Literal, cast
 
@@ -244,7 +245,7 @@ class OGIClient:
 
     def verify_recipients(
         self,
-        proposed_recipients: list[str],
+        proposed_recipients: Sequence[str],
         owner: str,
         client_profile_key: str = DEFAULT_PROFILE_KEY,
     ) -> tuple[bool, str | None]:

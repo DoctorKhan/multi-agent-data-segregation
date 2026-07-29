@@ -112,9 +112,10 @@ src/data_segregation_lab/
 ├── ownership.py       # intelligence ownership registry (synthetic tenant metadata)
 ├── backends.py        # deterministic and opt-in OpenRouter adapters
 ├── tool_protocol.py   # fail-closed parsing + sanitize_tool_call boundary
+├── policies.py        # pure owner-scope and outbound-lineage decisions
 ├── storage.py         # storage protocol and in-memory implementation
 ├── ogi.py             # append-only hash-linked shared memory (OGI prototype)
-├── executors.py       # vulnerable, owner-scoped, and OGI provenance policies
+├── executors.py       # thin effectful shells for storage and OGI commits
 ├── scenario.py        # shared orchestration flow (4 scenario variants)
 ├── presentation.py    # terminal-safe rendering only
 ├── cli.py             # narrated demo entry point
@@ -142,7 +143,7 @@ Python makes it appear on the site; it cannot silently diverge from the lab.
 
 Tests are split along the same boundaries. Both CLIs and all end-to-end tests
 use `ScenarioRunner`; the presentation modules never execute storage operations.
-The Python suite includes **97 deterministic tests** (plus **21** browser demo
+The Python suite includes **109 deterministic tests** (plus **22** browser demo
 tests).
 
 ## Explicit OpenRouter mode
