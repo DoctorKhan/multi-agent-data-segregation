@@ -42,6 +42,10 @@ def _steps(scenario: Fixture) -> list[Fixture]:
     return steps
 
 
+# Evidence cards that may follow the final decision without re-deciding it.
+AUDIT_STEP_IDS = {"lineage", "approval"}
+
+
 def _boundary(number: int) -> Fixture:
     """The enforcement step, wherever it sits — audit steps may follow it."""
     return next(
@@ -53,7 +57,7 @@ def _boundary(number: int) -> Fixture:
 
 
 def test_payload_covers_every_scenario_the_cli_demonstrates() -> None:
-    assert [item["number"] for item in _scenarios()] == [1, 2, 3, 4]
+    assert [item["number"] for item in _scenarios()] == [1, 2, 3, 4, 5]
 
 
 def test_every_step_carries_the_fields_the_renderer_reads() -> None:
@@ -69,7 +73,7 @@ def test_every_scenario_walks_to_an_enforcement_decision() -> None:
     for scenario in _scenarios():
         ids = [step["id"] for step in _steps(scenario)]
         assert "boundary" in ids
-        assert set(ids[ids.index("boundary") + 1 :]) <= {"lineage"}
+        assert set(ids[ids.index("boundary") + 1 :]) <= AUDIT_STEP_IDS
 
 
 # ---- the security claims the page makes ----
@@ -190,3 +194,18 @@ def test_ogi_scenario_publishes_the_provenance_chain() -> None:
         step for step in _steps(_by_number(4)) if step["id"] == "lineage"
     )
     assert "ANOMALY" in cast(str, lineage["code"])
+
+
+def test_step_up_scenario_holds_the_rewrite_and_blocks_the_followup() -> None:
+    scenario = _by_number(5)
+    assert scenario["title"] == "STEP-UP APPROVAL"
+    assert scenario["outcome"] == "HELD / SAFE"
+    step_up = next(step for step in _steps(scenario) if step["id"] == "step-up")
+    assert "step-up approval" in step_up["body"]
+    assert step_up["highlight"] == "safe"
+    assert "attacker@protonmail.com" in cast(str, step_up["code"])
+    boundary = _boundary(5)
+    assert "not in verified lineage" in boundary["body"]
+    assert boundary["highlight"] == "safe"
+    approval = next(step for step in _steps(scenario) if step["id"] == "approval")
+    assert "sarah.jennings@private-domain.com" in cast(str, approval["code"])

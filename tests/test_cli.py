@@ -70,3 +70,14 @@ def test_ogi_entry_point_blocks_the_unverified_recipient(
     output = capsys.readouterr().out
     assert "BLOCKED / SAFE" in output
     assert "lineage" in output.lower()
+
+
+def test_ogi_entry_point_also_shows_the_step_up_hold(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setattr("sys.argv", ["segregation-demo-ogi"])
+    main_ogi()
+    output = capsys.readouterr().out
+    assert "STEP-UP APPROVAL" in output
+    assert "profile change requires step-up approval" in output
+    assert "HELD / SAFE" in output

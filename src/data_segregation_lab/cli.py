@@ -11,6 +11,7 @@ from data_segregation_lab.presentation import DemoPresenter
 from data_segregation_lab.scenario import (
     run_hardened_injection_scenario,
     run_ogi_contamination_scenario,
+    run_profile_rewrite_scenario,
     run_protected_scenario,
     run_vulnerable_scenario,
 )
@@ -77,6 +78,8 @@ def main_ogi() -> None:
         presenter.style(notice, "1;33"),
     ]
     print("\n".join(header) + presenter.render_ogi_scenario(ogi))
+    step_up = run_profile_rewrite_scenario(backend)
+    print(presenter.render_step_up_scenario(step_up))
 
 
 if __name__ == "__main__":

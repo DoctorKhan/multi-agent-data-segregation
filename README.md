@@ -31,6 +31,10 @@ orchestrator to read Client A's secret:
   memory with executor-side validation of every outbound recipient against
   committed tenant profile data — blocking cross-owner writes and any
   unverified address, including a BCC beside a legitimate `to`, before commit.
+- A fifth scenario (**step-up approval**) has a peer note hijack Client A's own
+  agent into re-pointing its verified profile. Tenancy passes because the agent
+  acts for its own client; the executor holds the change for out-of-band
+  approval, and mail to the new address is blocked.
 
 The vulnerable and corrected paths live side by side so the enforcement
 boundary is easy to compare. See [THREAT_MODEL.md](THREAT_MODEL.md) for the
@@ -64,7 +68,7 @@ Protected (confused deputy)          BLOCKED / SAFE
 Protected + peer injection           BLOCKED / SAFE
 ```
 
-Run the OGI provenance + outbound validation scenario:
+Run the OGI provenance + outbound validation and step-up approval scenarios:
 
 ```bash
 just demo-ogi
@@ -74,6 +78,7 @@ Expected conclusion:
 
 ```text
 OGI + outbound validation   BLOCKED / SAFE
+Profile rewrite + step-up   HELD / SAFE
 ```
 
 Reproduce only the intentional vulnerability test:
@@ -116,7 +121,7 @@ src/data_segregation_lab/
 ├── storage.py         # storage protocol and in-memory implementation
 ├── ogi.py             # append-only hash-linked shared memory (OGI prototype)
 ├── executors.py       # thin effectful shells for storage and OGI commits
-├── scenario.py        # shared orchestration flow (4 scenario variants)
+├── scenario.py        # shared orchestration flow (5 scenario variants)
 ├── presentation.py    # terminal-safe rendering only
 ├── cli.py             # narrated demo entry point
 ├── web_payload.py     # exports scenario evidence as the browser fixture

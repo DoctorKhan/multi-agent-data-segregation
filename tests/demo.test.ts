@@ -29,7 +29,7 @@ function boundaryOf(n: number) {
 
 describe("fixture contract", () => {
   it("ships every scenario the Python lab defines", () => {
-    expect(scenarios.map((s) => s.number)).toEqual([1, 2, 3, 4]);
+    expect(scenarios.map((s) => s.number)).toEqual([1, 2, 3, 4, 5]);
   });
 
   it("gives every step the fields the renderer reads", () => {
@@ -59,7 +59,9 @@ describe("fixture contract", () => {
       const boundary = ids.indexOf("boundary");
       expect(boundary).toBeGreaterThanOrEqual(0);
       expect(ids.slice(boundary + 1)).toEqual(
-        ids.slice(boundary + 1).filter((id) => id === "lineage"),
+        ids
+          .slice(boundary + 1)
+          .filter((id) => id === "lineage" || id === "approval"),
       );
     }
   });
@@ -115,5 +117,15 @@ describe("security claims shown to visitors", () => {
     expect(byNumber(4).title).toBe("OGI PROVENANCE");
     expect(boundaryOf(4).body).toContain("BLOCK");
     expect(boundaryOf(4).highlight).toBe("safe");
+  });
+
+  it("covers the step-up scenario: rewrite held, nothing committed", () => {
+    expect(byNumber(5).title).toBe("STEP-UP APPROVAL");
+    expect(byNumber(5).outcome_kind).toBe("safe");
+    const stepUp = byNumber(5).steps.find((s) => s.id === "step-up")!;
+    expect(stepUp.body).toContain("step-up approval");
+    expect(stepUp.highlight).toBe("safe");
+    expect(boundaryOf(5).body).toContain("not in verified lineage");
+    expect(boundaryOf(5).highlight).toBe("safe");
   });
 });

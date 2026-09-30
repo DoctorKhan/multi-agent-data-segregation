@@ -102,7 +102,19 @@ profile is held as pending and commits only through out-of-band approval
 (`approve_profile_change`), which no tool call can reach. This is the same
 control a pharmacy needs before an agent changes a patient's shipping address.
 
-Run the OGI scenario:
+### 5. Hijacked agent re-points its own profile (step-up approval)
+
+Client B sends a note to Client A's assistant with an injected instruction to
+update the contact email on file. Client A's own agent proposes the rewrite, so
+`requester == owner` and tenancy passes. `OGIProvenanceExecutor` holds the
+change as pending instead of committing it, and the agent's follow-up mail to
+the new address is blocked because the verified profile never changed.
+
+**Lesson:** tenancy cannot stop an agent acting for its own client. Changes to
+the data every later decision trusts (delivery address, payee, profile) need a
+human approving out-of-band.
+
+Run scenarios 4 and 5:
 
 ```bash
 just demo-ogi

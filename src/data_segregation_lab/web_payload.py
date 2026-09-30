@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 from data_segregation_lab.backends import DeterministicLLM, LLMBackend
-from data_segregation_lab.models import ScenarioResult
+from data_segregation_lab.models import ScenarioResult, ToolExecution
 from data_segregation_lab.rendering import (
     escape_terminal_controls,
     format_tool_call,
@@ -25,6 +25,7 @@ from data_segregation_lab.rendering import (
 from data_segregation_lab.scenario import (
     run_hardened_injection_scenario,
     run_ogi_contamination_scenario,
+    run_profile_rewrite_scenario,
     run_protected_scenario,
     run_vulnerable_scenario,
 )
@@ -73,6 +74,10 @@ def _outcome(result: ScenarioResult) -> tuple[str, OutcomeKind]:
     if result.attack == "ogi_contamination":
         blocked = result.write_execution.decision == "block"
         return ("BLOCKED / SAFE", "safe") if blocked else ("ALLOWED / LEAKED", "leaked")
+    if result.attack == "profile_rewrite":
+        if result.ogi_leak_blocked:
+            return "HELD / SAFE", "safe"
+        return "ALLOWED / REDIRECTED", "leaked"
     if result.leaked:
         return "ALLOWED / LEAKED", "leaked"
     if result.read_execution.decision == "block":
@@ -252,6 +257,93 @@ def _ogi_steps(result: ScenarioResult) -> list[DemoStep]:
     return steps
 
 
+def _decision_text(execution: ToolExecution) -> str:
+    if execution.decision == "block":
+        reason = escape_terminal_controls(execution.reason or "")
+        return f"BLOCK — {reason}" if reason else "BLOCK"
+    return f"Decision: {execution.decision}"
+
+
+def _step_up_steps(result: ScenarioResult) -> list[DemoStep]:
+    """Build the profile-rewrite walkthrough: hold, block, never commit."""
+    rewrite = result.write_execution
+    followup = result.followup_execution or ToolExecution(decision="no_decision")
+    held = rewrite.decision == "block"
+
+    steps = [
+        DemoStep(
+            id="committed-profile",
+            title="Verified profile on file",
+            actor="ogi",
+            body=(
+                "Onboarding committed Client A's profile. Every outbound "
+                "address is checked against it."
+            ),
+            code=f"client_a / client_profile = {result.stored_value}",
+        ),
+        DemoStep(
+            id="peer-note",
+            title="Client B's note reaches Client A's assistant",
+            actor="client_b → client_a",
+            body=_transcript("client_b", result.client_b_message.content),
+        ),
+        DemoStep(
+            id="hijacked-model",
+            title="Client A's own agent proposes the rewrite",
+            actor="client_a",
+            body=(
+                _transcript("client_a", result.client_a_output)
+                + "\n\nThe agent acts for client_a, so requester == owner and "
+                "the tenancy check passes."
+            ),
+            code=format_tool_call(rewrite.call) if rewrite.call else None,
+        ),
+        DemoStep(
+            id="step-up",
+            title="Step-up approval holds the change",
+            actor="executor",
+            body=(
+                "Policy: a committed profile changes only through out-of-band "
+                "approval, never a tool call.\n\n" + _decision_text(rewrite)
+            ),
+            code=f"pending (not committed): {result.pending_profile}",
+            highlight="safe" if held else "danger",
+        ),
+    ]
+    if result.reporting_message is not None:
+        followup_call = followup.call
+        steps.append(
+            DemoStep(
+                id="boundary",
+                title="The agent mails the new address anyway",
+                actor=f"{result.reporting_message.sender} → orchestrator",
+                body=(
+                    f"{result.reporting_message.content}\n\n"
+                    + _transcript("client_a", result.orchestrator_output)
+                    + "\n\n"
+                    + _decision_text(followup)
+                ),
+                code=format_tool_call(followup_call) if followup_call else None,
+                highlight="safe" if followup.decision == "block" else "danger",
+            )
+        )
+    steps.append(
+        DemoStep(
+            id="approval",
+            title="No human approved, so nothing committed",
+            actor="approval channel",
+            body=(
+                "A real change would be confirmed by the client through a "
+                "channel the agent cannot reach. Until then the verified "
+                "address stands."
+            ),
+            code=f"client_a / client_profile = {result.stored_value}",
+            highlight="safe",
+        )
+    )
+    return steps
+
+
 def present_scenario(
     number: int,
     label: str,
@@ -262,7 +354,15 @@ def present_scenario(
     protected = result.mode == "protected"
     outcome, outcome_kind = _outcome(result)
 
-    if result.attack == "ogi_contamination":
+    if result.attack == "profile_rewrite":
+        title = "STEP-UP APPROVAL"
+        subtitle = (
+            "A hijacked agent re-points its own profile; tenancy passes, "
+            "step-up approval holds it."
+        )
+        policy = "committed profile changes need out-of-band approval"
+        steps = _step_up_steps(result)
+    elif result.attack == "ogi_contamination":
         title = "OGI PROVENANCE"
         subtitle = "Append-only shared memory with executor-side recipient validation."
         policy = "requester == owner; every recipient must match committed profile"
@@ -326,6 +426,12 @@ def build_payload(backend: LLMBackend | None = None) -> dict[str, Any]:
             "4 · OGI provenance",
             "OGI + outbound validation",
             run_ogi_contamination_scenario(selected),
+        ),
+        present_scenario(
+            5,
+            "5 · Step-up approval",
+            "Profile rewrite + step-up",
+            run_profile_rewrite_scenario(selected),
         ),
     ]
     return {

@@ -17,6 +17,7 @@ ATTACK_LABELS: dict[str, str] = {
     "cross_owner": "cross-owner read (confused deputy)",
     "peer_injection": "peer-message instruction injection",
     "ogi_contamination": "peer contamination of shared memory",
+    "profile_rewrite": "hijacked agent re-points its own profile",
 }
 
 
@@ -191,6 +192,53 @@ class DemoPresenter:
                 "The primary recipient here is the verified address; only the injected",
                 "bcc is unauthorized, and it is what triggers the block. Renaming the",
                 "key does not bypass the check — validation follows the payload.",
+            ]
+        )
+        return "\n".join(lines)
+
+    def render_step_up_scenario(self, result: ScenarioResult) -> str:
+        """Render the profile-rewrite scenario held by step-up approval."""
+        rewrite = result.write_execution
+        followup = result.followup_execution
+        outcome = "HELD / SAFE" if result.ogi_leak_blocked else "ALLOWED / REDIRECTED"
+        lines = [
+            "",
+            self.style("STEP-UP APPROVAL  ·  PROTECTED", "1;35"),
+            "A hijacked agent re-points its own profile; step-up holds it.",
+            "─" * WIDTH,
+            "",
+            "1. A peer note reaches Client A's assistant",
+            f"   Message:           {result.client_b_message.sender} → "
+            f"{result.client_b_message.recipient}",
+            *self._transcript("client_a", result.client_a_output),
+            "   Requester:         client_a (its own agent, so tenancy passes)",
+            "",
+            "2. Executor requires out-of-band approval for profile changes",
+        ]
+        if rewrite.call is not None:
+            lines.append(f"   Proposed call:     {format_tool_call(rewrite.call)}")
+        lines.append("   Pending:           held for approval, not committed")
+        lines.extend(self._execution_details(rewrite))
+        if result.reporting_message is not None and followup is not None:
+            lines.extend(
+                [
+                    "",
+                    "3. The agent mails the new address anyway",
+                    f"   Request text:      {result.reporting_message.content}",
+                    *self._transcript("client_a", result.orchestrator_output),
+                    *self._execution_details(followup),
+                ]
+            )
+        lines.extend(
+            [
+                "",
+                self.style("OUTCOME", "1;36"),
+                "─" * WIDTH,
+                f"   {'Profile rewrite + step-up':<36} {outcome}",
+                "",
+                "Tenancy cannot stop an agent acting for its own client. The",
+                "profile only changes when a human approves out-of-band, so the",
+                "verified address stands and mail to the new one is blocked.",
             ]
         )
         return "\n".join(lines)

@@ -11,7 +11,9 @@ from data_segregation_lab.prompts import Hardening
 ToolAction = Literal["read", "write"]
 Decision = Literal["allow", "block", "no_decision"]
 ScenarioMode = Literal["vulnerable", "protected"]
-AttackKind = Literal["cross_owner", "peer_injection", "ogi_contamination"]
+AttackKind = Literal[
+    "cross_owner", "peer_injection", "ogi_contamination", "profile_rewrite"
+]
 
 
 @dataclass(frozen=True)
@@ -87,6 +89,10 @@ class ScenarioResult:
     # Newest-first provenance chain for the contaminated key, for audit display.
     ogi_lineage: tuple[OGIMemoryEntry, ...] = ()
     ogi_leak_blocked: bool = False
+    # Profile change held for out-of-band approval (profile_rewrite scenario).
+    pending_profile: str | None = None
+    # Outbound attempt made after the profile change was proposed.
+    followup_execution: ToolExecution | None = None
 
     @property
     def leaked(self) -> bool:

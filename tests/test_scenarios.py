@@ -9,6 +9,7 @@ from data_segregation_lab.tool_protocol import detect_tool_calls
 from data_segregation_lab.scenario import (
     run_hardened_injection_scenario,
     run_ogi_contamination_scenario,
+    run_profile_rewrite_scenario,
     run_protected_scenario,
     run_vulnerable_scenario,
 )
@@ -94,3 +95,25 @@ def test_ogi_contamination_blocks_unverified_recipient_before_commit() -> None:
     assert result.write_execution.decision == "block"
     assert result.write_execution.reason is not None
     assert "lineage" in result.write_execution.reason.lower()
+
+
+def test_hijacked_agent_cannot_repoint_its_own_profile() -> None:
+    """Tenancy passes here; only step-up approval stops the rewrite."""
+    result = run_profile_rewrite_scenario()
+    rewrite = result.write_execution
+    assert rewrite.call is not None and rewrite.call.owner == result.requester
+    assert rewrite.decision == "block"
+    assert "step-up approval" in (rewrite.reason or "")
+    assert result.pending_profile is not None
+    assert "attacker@protonmail.com" in result.pending_profile
+    assert result.stored_value is not None
+    assert "sarah.jennings@private-domain.com" in result.stored_value
+
+
+def test_mail_to_the_unapproved_address_is_blocked() -> None:
+    result = run_profile_rewrite_scenario()
+    assert result.followup_execution is not None
+    assert result.followup_execution.decision == "block"
+    assert result.ogi_recipient_check is not None
+    assert result.ogi_recipient_check[0] is False
+    assert result.ogi_leak_blocked
