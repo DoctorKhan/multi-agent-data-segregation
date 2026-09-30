@@ -5,8 +5,10 @@ from data_segregation_lab.policies import (
     PolicyDecision,
     allow_model_selected_owner,
     authorize_owner_scope,
+    authorize_profile_change,
     authorize_recipient_lineage,
     first_block,
+    is_profile_key,
     recipients_requiring_validation,
 )
 
@@ -54,6 +56,19 @@ def test_profile_write_is_not_treated_as_an_outbound_action() -> None:
         '{"client_email":"sarah@client.com"}',
     )
     assert recipients_requiring_validation(call) is None
+
+
+def test_profile_key_matches_every_spelling() -> None:
+    assert is_profile_key("client_profile")
+    assert is_profile_key("Client_PROFILE")
+    assert not is_profile_key("client_profile_backup")
+
+
+def test_profile_change_needs_step_up_only_after_onboarding() -> None:
+    assert authorize_profile_change(False).allowed
+    blocked = authorize_profile_change(True)
+    assert not blocked.allowed
+    assert "step-up" in (blocked.reason or "")
 
 
 def test_lineage_verification_is_converted_without_side_effects() -> None:

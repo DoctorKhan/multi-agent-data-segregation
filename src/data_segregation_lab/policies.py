@@ -57,6 +57,28 @@ def authorize_owner_scope(requester: str, call: ToolCall) -> PolicyDecision:
     return ALLOW
 
 
+def is_profile_key(key: str) -> bool:
+    """True for any spelling of the profile key.
+
+    OGI chains are case-insensitive, so ``Client_Profile`` rewrites the same
+    lineage as ``client_profile`` and must be governed the same way.
+    """
+    return key.casefold() == PROFILE_KEY
+
+
+def authorize_profile_change(has_committed_profile: bool) -> PolicyDecision:
+    """Require out-of-band approval before a committed profile changes.
+
+    The profile is the address every outbound action is checked against, so a
+    hijacked agent that could rewrite it would re-point all later deliveries.
+    The first profile is allowed as onboarding; every change after that waits
+    for a human, never the model.
+    """
+    if has_committed_profile:
+        return PolicyDecision("block", "profile change requires step-up approval")
+    return ALLOW
+
+
 def recipients_requiring_validation(call: ToolCall) -> tuple[str, ...] | None:
     """Return outbound recipients, or None when the call is not outbound.
 
@@ -64,7 +86,7 @@ def recipients_requiring_validation(call: ToolCall) -> tuple[str, ...] | None:
     no verifiable recipient. Keeping that distinct from None preserves
     fail-closed evaluation.
     """
-    if call.action != "write" or call.key == PROFILE_KEY:
+    if call.action != "write" or is_profile_key(call.key):
         return None
 
     recipients = tuple(extract_recipients(call.value or ""))

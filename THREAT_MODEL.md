@@ -36,10 +36,21 @@ allow write when requester == owner
 deny a delivery-shaped key that carries no verifiable recipient
 ```
 
-Recipients are read from `to`, `cc`, `bcc`, `reply_to`, and `recipients`, then
-the whole payload is swept for address-shaped text so an address hidden in an
-unexpected field still reaches validation. A `to` that matches the committed
-profile does not excuse an unverified `bcc`.
+Recipients are read from `to`, `cc`, `bcc`, `reply_to`, and `recipients` at any
+depth of the decoded JSON, including JSON nested inside string values. Every
+decoded string and the raw payload are then swept for address-shaped text, so an
+address hidden in an unexpected field or behind a JSON escape
+(`evil\u0040attacker.com`) still reaches validation. A `to` that matches the
+committed profile does not excuse an unverified `bcc`.
+
+Because the committed profile is what every outbound address is checked
+against, changing it is a step-up action:
+
+```text
+allow the first client_profile write (onboarding)
+hold any later client_profile write (any key spelling) as pending and deny it
+commit a pending profile only through out-of-band approval, never a tool call
+```
 
 Only **committed** OGI entries are readable. Proposed or anomalous entries are
 ignored by agents. Cross-owner reads and writes default-deny at the executor.
@@ -120,6 +131,8 @@ request is blocked before storage mutation.
   stray address) against committed `client_profile` data, keyed on payload shape
   rather than key name
 - Cross-owner default-deny and unverified-recipient blocking **before** commit
+- Step-up approval for profile changes: a model-proposed rewrite is held as
+  pending and only `approve_profile_change`, the out-of-band human path, commits it
 
 Run the OGI scenario:
 
@@ -142,11 +155,9 @@ just demo-ogi
 
 This lab does not claim to implement production-grade authentication,
 authorization, durable storage, audit logging, quotas, transactional updates,
-or a hardened tool-call schema. A write to `client_profile` establishes the
-address later outbound calls are checked against and is not itself re-verified,
-so a hijacked agent acting as its own tenant can still re-point its profile.
-Those
-omissions must not be copied into a real system. They should become separate,
+or a hardened tool-call schema. The first `client_profile` write is trusted as
+onboarding, and step-up approval is a single in-process method rather than an
+authenticated approval workflow. Those omissions must not be copied into a real system. They should become separate,
 explicitly documented scenarios if the repository is expanded.
 
 The OGI layer is a **prototype** illustrating provenance and outbound

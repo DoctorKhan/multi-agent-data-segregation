@@ -96,6 +96,12 @@ BCC alongside it. `OGIProvenanceExecutor` blocks the write and marks an anomaly
 tenant data, not inferred from model output or peer messages — and validating
 the primary recipient alone leaves the exfiltration channel wide open.
 
+The committed profile is itself a target: an agent that can rewrite
+`client_profile` re-points every later delivery. So a change to a committed
+profile is held as pending and commits only through out-of-band approval
+(`approve_profile_change`), which no tool call can reach. This is the same
+control a pharmacy needs before an agent changes a patient's shipping address.
+
 Run the OGI scenario:
 
 ```bash
@@ -124,7 +130,7 @@ vulnerable/protected pair, reproducible tests, network opt-in only.
 
 ## What this lab deliberately does not implement
 
-Audit logging, durable storage, OAuth between agents, human-in-the-loop approvals,
-rate limits, and full JSON-schema tool calling. Those belong in production platforms —
+Audit logging, durable storage, OAuth between agents, an authenticated approval
+workflow (step-up approval here is a single in-process method), rate limits, and full JSON-schema tool calling. Those belong in production platforms —
 this repository exists to make the **authorization boundary** obvious before you bolt
 on the rest.

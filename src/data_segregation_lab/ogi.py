@@ -22,30 +22,68 @@ DEFAULT_PROFILE_KEY = "client_profile"
 _EMAIL_PATTERN = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
 
 
+# Nested JSON is walked to this depth; deeper structures are still swept as text.
+_MAX_JSON_DEPTH = 8
+
+
+def _decode_json(text: str) -> object | None:
+    try:
+        return json.loads(text)
+    except Exception:
+        return None
+
+
+def _walk_recipients(
+    node: object, structured: list[str], strings: list[str], depth: int
+) -> None:
+    """Collect recipient fields and every decoded string beneath ``node``.
+
+    Addresses must be matched against decoded values, not the raw payload:
+    ``"evil\\u0040attacker.com"`` has no ``@`` until JSON decoding, and a
+    ``bcc`` nested under ``headers`` is still a delivery field.
+    """
+    if depth > _MAX_JSON_DEPTH:
+        return
+    if isinstance(node, dict):
+        fields = cast(dict[object, object], node)
+        for name, value in fields.items():
+            _walk_recipients(value, structured, strings, depth + 1)
+            if str(name).casefold() not in RECIPIENT_FIELDS:
+                continue
+            if isinstance(value, str):
+                structured.append(value.strip())
+            elif isinstance(value, list):
+                entries = cast(list[object], value)
+                structured.extend(str(item).strip() for item in entries)
+    elif isinstance(node, list):
+        for item in cast(list[object], node):
+            _walk_recipients(item, structured, strings, depth + 1)
+    elif isinstance(node, str):
+        strings.append(node)
+        # A string that is itself JSON (double encoding) is walked too.
+        if node.lstrip()[:1] in {"{", "["}:
+            inner = _decode_json(node)
+            if inner is not None:
+                _walk_recipients(inner, structured, strings, depth + 1)
+
+
 def extract_recipients(payload: str) -> list[str]:
     """Collect every address an outbound payload could deliver to.
 
-    Known recipient fields are read structurally, then the whole payload is
-    swept for address-shaped text so a recipient hidden in an unexpected field
-    still reaches validation. Order is preserved and duplicates removed.
+    Recipient fields are read structurally at any depth, then every decoded
+    string and the raw payload are swept for address-shaped text so a recipient
+    hidden in an unexpected field or behind a JSON escape still reaches
+    validation. Order is preserved and duplicates removed.
     """
-    found: list[str] = []
-    try:
-        data = json.loads(payload)
-    except Exception:
-        data = None
+    structured: list[str] = []
+    strings: list[str] = []
+    data = _decode_json(payload)
+    if data is not None:
+        _walk_recipients(data, structured, strings, 0)
 
-    if isinstance(data, dict):
-        fields = cast(dict[str, object], data)
-        for field in RECIPIENT_FIELDS:
-            value: object = fields.get(field)
-            if isinstance(value, str):
-                found.append(value.strip())
-            elif isinstance(value, list):
-                entries = cast(list[object], value)
-                found.extend(str(item).strip() for item in entries)
-
-    found.extend(_EMAIL_PATTERN.findall(payload))
+    found = list(structured)
+    for text in (*strings, payload):
+        found.extend(_EMAIL_PATTERN.findall(text))
 
     seen: set[str] = set()
     recipients: list[str] = []

@@ -268,6 +268,117 @@ def test_ordinary_writes_are_untouched_by_outbound_validation() -> None:
     assert client.read("client_a", "secret") == "42"
 
 
+def test_escaped_bcc_nested_in_another_field_is_still_validated() -> None:
+    """``\\u0040`` hides the ``@`` from a raw-text sweep until JSON decoding."""
+    executor, client = _executor_with_profile()
+    payload = (
+        '{"to": "sarah@client.com", "headers": {"bcc": "evil\\u0040attacker.com"}}'
+    )
+    assert "evil@attacker.com" in extract_recipients(payload)
+    execution = executor.execute(
+        "client_a", ToolCall("write", "client_a", "email_action", payload)
+    )
+    assert execution.decision == "block"
+    assert "evil@attacker.com" in (execution.reason or "")
+    assert client.read("client_a", "email_action") is None
+
+
+def test_recipient_inside_double_encoded_json_is_extracted() -> None:
+    inner = json.dumps({"bcc": "evil@attacker.com"}).replace("@", "\\u0040")
+    payload = json.dumps({"to": "sarah@client.com", "meta": inner})
+    assert "evil@attacker.com" in extract_recipients(payload)
+
+
+# ---- a committed profile changes only with step-up approval ----
+
+
+def _profile(address: str) -> str:
+    return json.dumps({"client_email": address})
+
+
+def test_first_profile_is_allowed_as_onboarding() -> None:
+    executor = OGIProvenanceExecutor(InMemoryStore(), OGIClient())
+    execution = executor.execute(
+        "client_a",
+        ToolCall("write", "client_a", "client_profile", _profile("sarah@client.com")),
+    )
+    assert execution.decision == "allow"
+
+
+def test_agent_cannot_repoint_a_committed_profile() -> None:
+    executor, client = _executor_with_profile()
+    execution = executor.execute(
+        "client_a",
+        ToolCall("write", "client_a", "client_profile", _profile("evil@attacker.com")),
+    )
+    assert execution.decision == "block"
+    assert "step-up approval" in (execution.reason or "")
+    assert client.verified_email("client_a") == ("sarah@client.com", None)
+    assert executor.pending_profile("client_a") == _profile("evil@attacker.com")
+
+
+def test_case_variant_profile_key_also_requires_step_up() -> None:
+    executor, client = _executor_with_profile()
+    execution = executor.execute(
+        "client_a",
+        ToolCall("write", "client_a", "Client_Profile", _profile("sarah@client.com")),
+    )
+    assert execution.decision == "block"
+    assert "step-up approval" in (execution.reason or "")
+    assert client.verified_email("client_a") == ("sarah@client.com", None)
+
+
+def test_outbound_mail_to_a_pending_address_stays_blocked() -> None:
+    executor, _ = _executor_with_profile()
+    executor.execute(
+        "client_a",
+        ToolCall("write", "client_a", "client_profile", _profile("new@client.com")),
+    )
+    execution = executor.execute(
+        "client_a",
+        ToolCall(
+            "write", "client_a", "email_action", json.dumps({"to": "new@client.com"})
+        ),
+    )
+    assert execution.decision == "block"
+
+
+def test_approved_profile_change_commits_the_held_value() -> None:
+    executor, client = _executor_with_profile()
+    executor.execute(
+        "client_a",
+        ToolCall("write", "client_a", "client_profile", _profile("new@client.com")),
+    )
+    approval = executor.approve_profile_change("client_a")
+    assert approval.decision == "allow"
+    assert client.verified_email("client_a") == ("new@client.com", None)
+    assert executor.pending_profile("client_a") is None
+    execution = executor.execute(
+        "client_a",
+        ToolCall(
+            "write", "client_a", "email_action", json.dumps({"to": "new@client.com"})
+        ),
+    )
+    assert execution.decision == "allow"
+
+
+def test_approval_without_a_pending_change_is_denied() -> None:
+    executor, client = _executor_with_profile()
+    approval = executor.approve_profile_change("client_a")
+    assert approval.decision == "block"
+    assert client.verified_email("client_a") == ("sarah@client.com", None)
+
+
+def test_step_up_does_not_let_one_tenant_stage_anothers_profile() -> None:
+    executor, _ = _executor_with_profile()
+    execution = executor.execute(
+        "client_b",
+        ToolCall("write", "client_a", "client_profile", _profile("evil@attacker.com")),
+    )
+    assert execution.decision == "block"
+    assert executor.pending_profile("client_a") is None
+
+
 # ---- deny paths that would otherwise fail open ----
 
 
