@@ -62,7 +62,7 @@ class ScenarioPresentation:
     outcome: str
     outcome_kind: OutcomeKind
     steps: list[DemoStep] = field(default_factory=lambda: list[DemoStep]())
-    owasp_refs: list[str] = field(default_factory=list)
+    owasp_refs: list[str] = field(default_factory=lambda: list[str]())
     acs_checkpoint: str = ""
 
 
@@ -410,6 +410,27 @@ def present_scenario(
             policy += f"; orchestrator prompt={result.orchestrator_hardening}"
         steps = _standard_steps(result)
 
+    owasp_refs: dict[int, list[str]] = {
+        1: [
+            "ASI02 Tool Misuse and Exploitation",
+            "ASI03 Identity and Privilege Abuse",
+        ],
+        2: ["ASI03 Identity and Privilege Abuse"],
+        3: [
+            "ASI01 Agent Goal Hijack",
+            "ASI07 Insecure Inter-Agent Communication",
+            "ASI03 Identity and Privilege Abuse",
+        ],
+        4: [
+            "ASI06 Memory and Context Poisoning",
+            "ASI02 Tool Misuse and Exploitation",
+        ],
+        5: [
+            "ASI01 Agent Goal Hijack",
+            "ASI03 Identity and Privilege Abuse",
+            "ASI09 Human-Agent Trust Exploitation",
+        ],
+    }
     return ScenarioPresentation(
         number=number,
         title=title,
@@ -420,27 +441,7 @@ def present_scenario(
         outcome=outcome,
         outcome_kind=outcome_kind,
         steps=steps,
-        owasp_refs={
-            1: [
-                "ASI02 Tool Misuse and Exploitation",
-                "ASI03 Identity and Privilege Abuse",
-            ],
-            2: ["ASI03 Identity and Privilege Abuse"],
-            3: [
-                "ASI01 Agent Goal Hijack",
-                "ASI07 Insecure Inter-Agent Communication",
-                "ASI03 Identity and Privilege Abuse",
-            ],
-            4: [
-                "ASI06 Memory and Context Poisoning",
-                "ASI02 Tool Misuse and Exploitation",
-            ],
-            5: [
-                "ASI01 Agent Goal Hijack",
-                "ASI03 Identity and Privilege Abuse",
-                "ASI09 Human-Agent Trust Exploitation",
-            ],
-        }[number],
+        owasp_refs=owasp_refs[number],
         acs_checkpoint=_acs_checkpoint(number, result),
     )
 
