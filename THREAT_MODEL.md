@@ -142,6 +142,11 @@ just demo-ogi
 
 ## Safety controls
 
+The protected paths demonstrate a local, ACS-inspired pre-effect decision point.
+They are not an ACS implementation: no ACS JSON-RPC exchange, authenticated
+envelope, handshake, replay defense, or conformance claim is present. The browser
+crosswalk identifies the relevant 2026 OWASP Agentic risks per scenario.
+
 - `just demo` and `just demo-ogi` always use `DeterministicLLM`, regardless of environment variables.
 - `just demo-openrouter` is the only command that loads `.env.openrouter`.
 - CI has read-only repository permission, receives no OpenRouter secret, and

@@ -62,6 +62,8 @@ class ScenarioPresentation:
     outcome: str
     outcome_kind: OutcomeKind
     steps: list[DemoStep] = field(default_factory=lambda: list[DemoStep]())
+    owasp_refs: list[str] = field(default_factory=list)
+    acs_checkpoint: str = ""
 
 
 def _transcript(actor: str, text: str) -> str:
@@ -264,6 +266,28 @@ def _decision_text(execution: ToolExecution) -> str:
     return f"Decision: {execution.decision}"
 
 
+def _acs_checkpoint(number: int, result: ScenarioResult) -> str:
+    """Describe local Guardian evidence without claiming ACS wire conformance."""
+    execution = result.write_execution if number in {4, 5} else result.read_execution
+    if execution.acs_disposition == "not_configured":
+        return (
+            "No Guardian checkpoint is configured; the vulnerable call proceeds. "
+            "This is the control gap the scenario exposes."
+        )
+    if execution.acs_disposition is None:
+        return "No tool-call decision was produced in this scenario."
+    disposition = execution.acs_disposition.upper()
+    reason = (
+        f" Reason: {escape_terminal_controls(execution.reason)}"
+        if execution.reason
+        else ""
+    )
+    return (
+        f"{execution.acs_method} → {disposition} before the effect.{reason} "
+        "Local simulation only; no ACS JSON-RPC exchange occurs."
+    )
+
+
 def _step_up_steps(result: ScenarioResult) -> list[DemoStep]:
     """Build the profile-rewrite walkthrough: hold, block, never commit."""
     rewrite = result.write_execution
@@ -396,6 +420,28 @@ def present_scenario(
         outcome=outcome,
         outcome_kind=outcome_kind,
         steps=steps,
+        owasp_refs={
+            1: [
+                "ASI02 Tool Misuse and Exploitation",
+                "ASI03 Identity and Privilege Abuse",
+            ],
+            2: ["ASI03 Identity and Privilege Abuse"],
+            3: [
+                "ASI01 Agent Goal Hijack",
+                "ASI07 Insecure Inter-Agent Communication",
+                "ASI03 Identity and Privilege Abuse",
+            ],
+            4: [
+                "ASI06 Memory and Context Poisoning",
+                "ASI02 Tool Misuse and Exploitation",
+            ],
+            5: [
+                "ASI01 Agent Goal Hijack",
+                "ASI03 Identity and Privilege Abuse",
+                "ASI09 Human-Agent Trust Exploitation",
+            ],
+        }[number],
+        acs_checkpoint=_acs_checkpoint(number, result),
     )
 
 

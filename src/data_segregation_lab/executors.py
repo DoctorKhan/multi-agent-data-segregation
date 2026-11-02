@@ -4,7 +4,12 @@ from __future__ import annotations
 
 from typing import Protocol
 
-from data_segregation_lab.models import ScenarioMode, ToolCall, ToolExecution
+from data_segregation_lab.models import (
+    GuardianDisposition,
+    ScenarioMode,
+    ToolCall,
+    ToolExecution,
+)
 from data_segregation_lab.ogi import OGIClient
 from data_segregation_lab.policies import (
     PROFILE_KEY,
@@ -21,18 +26,34 @@ from data_segregation_lab.storage import Store
 
 def _blocked(call: ToolCall, decision: PolicyDecision) -> ToolExecution:
     """Translate a pure policy denial into the executor's public result."""
-    return ToolExecution(decision="block", call=call, reason=decision.reason)
+    disposition: GuardianDisposition = (
+        "ask"
+        if decision.reason == "profile change requires step-up approval"
+        else "deny"
+    )
+    return ToolExecution(
+        decision="block",
+        call=call,
+        reason=decision.reason,
+        acs_method="steps/toolCallRequest",
+        acs_disposition=disposition,
+    )
 
 
 def _execute_store(store: Store, call: ToolCall) -> ToolExecution:
     """Imperative shell for an already-authorized storage operation."""
     if call.action == "write":
         store.write(call.owner, call.key, call.value or "")
-        return ToolExecution(decision="allow", call=call)
+        return ToolExecution(
+            decision="allow", call=call,
+            acs_method="steps/toolCallRequest", acs_disposition="allow",
+        )
     return ToolExecution(
         decision="allow",
         call=call,
         value=store.read(call.owner, call.key),
+        acs_method="steps/toolCallRequest",
+        acs_disposition="allow",
     )
 
 
@@ -61,7 +82,15 @@ class VulnerableToolExecutor:
         decision = allow_model_selected_owner(requester, call)
         if not decision.allowed:
             return _blocked(call, decision)
-        return _execute_store(self._store, call)
+        execution = _execute_store(self._store, call)
+        return ToolExecution(
+            decision=execution.decision,
+            call=execution.call,
+            value=execution.value,
+            reason=execution.reason,
+            acs_method="steps/toolCallRequest",
+            acs_disposition="not_configured",
+        )
 
 
 class OwnerScopedToolExecutor:
@@ -125,7 +154,10 @@ class OGIProvenanceExecutor:
                 decision="block", call=call, reason="no pending profile change"
             )
         self._commit_write(call)
-        return ToolExecution(decision="allow", call=call)
+        return ToolExecution(
+            decision="allow", call=call,
+            acs_method="steps/toolCallRequest", acs_disposition="allow",
+        )
 
     def _commit_write(self, call: ToolCall) -> None:
         self._client.propose(call.owner, call.key, call.value or "")
@@ -155,13 +187,21 @@ class OGIProvenanceExecutor:
                     return _blocked(call, lineage)
 
             self._commit_write(call)
-            return ToolExecution(decision="allow", call=call)
+            return ToolExecution(
+                decision="allow", call=call,
+                acs_method="steps/toolCallRequest", acs_disposition="allow",
+            )
 
         value = self._client.read(call.owner, call.key)
         if value is None:
-            return ToolExecution(decision="block", call=call)
+            return ToolExecution(
+                decision="block", call=call,
+                acs_method="steps/toolCallRequest", acs_disposition="deny",
+            )
         return ToolExecution(
             decision="allow",
             call=call,
             value=self._store.read(call.owner, call.key),
+            acs_method="steps/toolCallRequest",
+            acs_disposition="allow",
         )

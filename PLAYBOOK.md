@@ -27,6 +27,31 @@ and **capability walls**.
 **Trusted:** requester identity assigned by the runtime before any model call.
 **Untrusted:** every message body, prompt fragment, and model/tool proposal.
 
+## Current standards lens
+
+The browser walkthrough labels each scenario against the **OWASP Top 10 for Agentic
+Applications (2026)**. These are educational mappings, not a claim that the lab
+implements or satisfies an OWASP standard.
+
+The walkthrough also shows an **ACS v0.1.0-inspired checkpoint** at
+`steps/toolCallRequest`: a Guardian reviews the proposed effect before the executor
+touches storage. The protected executor's local policy demonstrates the decision
+point; this lab does not implement ACS JSON-RPC, signed envelopes, handshake,
+replay protection, or ACS conformance. Cross-agent scenarios also make visible why
+inter-agent visibility and requester identity matter to a real Guardian. See the
+[OWASP ACS resource](https://genai.owasp.org/resource/agent-control-standard-acs/)
+and the [published ACS specification](https://github.com/GenAI-Security-Project/agent-control-standard).
+
+| Lab scenario | OWASP Agentic Top 10 (2026) | ACS control point illustrated |
+| --- | --- | --- |
+| Confused deputy | ASI02 Tool Misuse; ASI03 Identity & Privilege Abuse | `steps/toolCallRequest`: deny cross-owner access |
+| Peer instruction injection | ASI01 Agent Goal Hijack; ASI07 Insecure Inter-Agent Communication; ASI03 | Tool request is denied by executor policy, regardless of prompt outcome |
+| Shared-memory contamination | ASI06 Memory & Context Poisoning; ASI02 | Deny before outbound effect; retain provenance evidence |
+| Profile rewrite | ASI01; ASI03; ASI09 Human-Agent Trust Exploitation | Ask/hold for out-of-band approval; no approval means no commit |
+
+See the current [OWASP Agentic Top 10](https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/)
+and [OWASP GenAI LLM Top 10 (2026)](https://genai.owasp.org/resource/owasp-genai-llm-top-10-2026/).
+
 ## Defense layers (apply in order)
 
 1. **Protocol** — bind sender/recipient in the message envelope; never let the model

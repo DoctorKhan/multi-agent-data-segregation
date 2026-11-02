@@ -2,11 +2,16 @@
   "generated_by": "segregation-export-demo",
   "scenarios": [
     {
+      "acs_checkpoint": "No Guardian checkpoint is configured; the vulnerable call proceeds. This is the control gap the scenario exposes.",
       "comparison_label": "Intentionally vulnerable",
       "label": "1 \u00b7 Vulnerable",
       "number": 1,
       "outcome": "ALLOWED / LEAKED",
       "outcome_kind": "leaked",
+      "owasp_refs": [
+        "ASI02 Tool Misuse and Exploitation",
+        "ASI03 Identity and Privilege Abuse"
+      ],
       "policy": "none (unsafe)",
       "steps": [
         {
@@ -70,11 +75,15 @@
       "title": "INTENTIONALLY VULNERABLE"
     },
     {
+      "acs_checkpoint": "steps/toolCallRequest \u2192 DENY before the effect. Local simulation only; no ACS JSON-RPC exchange occurs.",
       "comparison_label": "Protected executor",
       "label": "2 \u00b7 Protected",
       "number": 2,
       "outcome": "BLOCKED / SAFE",
       "outcome_kind": "safe",
+      "owasp_refs": [
+        "ASI03 Identity and Privilege Abuse"
+      ],
       "policy": "requester must equal target owner",
       "steps": [
         {
@@ -138,11 +147,17 @@
       "title": "PROTECTED"
     },
     {
+      "acs_checkpoint": "steps/toolCallRequest \u2192 DENY before the effect. Local simulation only; no ACS JSON-RPC exchange occurs.",
       "comparison_label": "Protected + injection",
       "label": "3 \u00b7 Peer injection",
       "number": 3,
       "outcome": "BLOCKED / SAFE",
       "outcome_kind": "safe",
+      "owasp_refs": [
+        "ASI01 Agent Goal Hijack",
+        "ASI07 Insecure Inter-Agent Communication",
+        "ASI03 Identity and Privilege Abuse"
+      ],
       "policy": "requester must equal target owner; orchestrator prompt=hardened",
       "steps": [
         {
@@ -206,11 +221,16 @@
       "title": "PROTECTED"
     },
     {
+      "acs_checkpoint": "steps/toolCallRequest \u2192 DENY before the effect. Reason: recipients attacker@protonmail.com not in verified lineage sarah.jennings@private-domain.com Local simulation only; no ACS JSON-RPC exchange occurs.",
       "comparison_label": "OGI + outbound validation",
       "label": "4 \u00b7 OGI provenance",
       "number": 4,
       "outcome": "BLOCKED / SAFE",
       "outcome_kind": "safe",
+      "owasp_refs": [
+        "ASI06 Memory and Context Poisoning",
+        "ASI02 Tool Misuse and Exploitation"
+      ],
       "policy": "requester == owner; every recipient must match committed profile",
       "steps": [
         {
@@ -274,11 +294,17 @@
       "title": "OGI PROVENANCE"
     },
     {
+      "acs_checkpoint": "steps/toolCallRequest \u2192 ASK before the effect. Reason: profile change requires step-up approval Local simulation only; no ACS JSON-RPC exchange occurs.",
       "comparison_label": "Profile rewrite + step-up",
       "label": "5 \u00b7 Step-up approval",
       "number": 5,
       "outcome": "HELD / SAFE",
       "outcome_kind": "safe",
+      "owasp_refs": [
+        "ASI01 Agent Goal Hijack",
+        "ASI03 Identity and Privilege Abuse",
+        "ASI09 Human-Agent Trust Exploitation"
+      ],
       "policy": "committed profile changes need out-of-band approval",
       "steps": [
         {

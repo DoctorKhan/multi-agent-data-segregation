@@ -28,6 +28,10 @@ export interface ScenarioPresentation {
   outcome: string;
   outcome_kind: OutcomeKind;
   steps: DemoStep[];
+  /** OWASP Top 10 for Agentic Applications 2026 risk crosswalk. */
+  owasp_refs?: string[];
+  /** ACS-inspired checkpoint; this educational demo does not implement the ACS wire protocol. */
+  acs_checkpoint?: string;
 }
 
 export interface DemoPayload {

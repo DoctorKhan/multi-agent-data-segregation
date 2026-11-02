@@ -54,7 +54,12 @@ export function headerHtml(scenario: ScenarioPresentation): string {
   return `
     <h2>Scenario ${scenario.number} · ${escapeHtml(scenario.title)}</h2>
     <p>${escapeHtml(scenario.subtitle)}</p>
-    <p class="policy">Policy: ${escapeHtml(scenario.policy)}</p>`;
+    <p class="policy">Policy: ${escapeHtml(scenario.policy)}</p>
+    <div class="standards-lens" aria-label="Standards crosswalk">
+      <div>OWASP Agentic Top 10 (2026): ${escapeHtml((scenario.owasp_refs ?? []).join(" · ") || "—")}</div>
+      <p>ACS v0.1.0 control-flow simulation: ${escapeHtml(scenario.acs_checkpoint ?? "No mapped checkpoint.")}</p>
+      <div class="standards-note">Conceptual mapping only: the lab does not speak ACS JSON-RPC or claim ACS conformance.</div>
+    </div>`;
 }
 
 export function trackHtml(steps: DemoStep[], activeStep: number): string {

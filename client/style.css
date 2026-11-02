@@ -298,6 +298,23 @@ h1 {
   margin-bottom: 22px;
 }
 
+.standards-lens {
+  margin: 12px 0 20px;
+  padding: 12px 14px;
+  border: 1px solid rgba(108, 177, 255, 0.25);
+  border-left: 3px solid #6cb1ff;
+  border-radius: 8px;
+  background: rgba(108, 177, 255, 0.06);
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.standards-lens { margin-bottom: 22px; }
+.standards-lens div:first-child { color: var(--text); }
+.standards-lens p { margin: 4px 0; }
+.standards-lens .standards-note { color: var(--dim); }
+
 /* progress track */
 .step-track {
   display: flex;

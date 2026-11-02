@@ -10,6 +10,7 @@ from data_segregation_lab.prompts import Hardening
 
 ToolAction = Literal["read", "write"]
 Decision = Literal["allow", "block", "no_decision"]
+GuardianDisposition = Literal["allow", "deny", "ask", "not_configured"]
 ScenarioMode = Literal["vulnerable", "protected"]
 AttackKind = Literal[
     "cross_owner", "peer_injection", "ogi_contamination", "profile_rewrite"
@@ -65,6 +66,9 @@ class ToolExecution:
     call: ToolCall | None = None
     value: str | None = None
     reason: str | None = None
+    # Local ACS-inspired teaching trace. It is not an ACS wire response.
+    acs_method: str | None = None
+    acs_disposition: GuardianDisposition | None = None
 
 
 @dataclass(frozen=True)

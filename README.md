@@ -46,6 +46,13 @@ security in regulated environments.
 prompt-injection CTF with constrained action schemas and adversarial output
 validation (`sanitizeDecision`). Capability Wall covers untrusted **context**; this lab covers untrusted **tools and tenancy**.
 
+The scenario viewer includes OWASP Agentic Top 10 (2026) mappings and records a
+local ACS-inspired pre-effect checkpoint (`steps/toolCallRequest`) for each tool
+proposal. The checkpoint runs through the lab's executor policy and reports
+ALLOW, DENY, ASK, or the intentionally vulnerable path's missing Guardian. It is
+a simulation, not an ACS wire implementation or conformance claim. See
+[PLAYBOOK.md](PLAYBOOK.md) for the scenario crosswalk and current OWASP links.
+
 ## Quick start
 
 Install the Python lab (or `just install` for both Python and browser deps):
